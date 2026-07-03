@@ -1,0 +1,15 @@
+# Dolibarr language file - fr_FR - dolimcp
+DoliMcpName=DoliMCP
+DoliMcpDescription=Serveur MCP distant pour Dolibarr
+DoliMcpDescriptionDetail=Expose votre Dolibarr comme serveur MCP (Model Context Protocol) via HTTP. Connectez Claude, Claude Code ou tout agent IA compatible MCP à votre ERP : consultation et gestion des tiers, factures, produits, commandes, projets, documents… avec les permissions de l'utilisateur associé à la clé API.
+DoliMcpSetup=Configuration de DoliMCP
+DoliMcpSetupIntro=Ce module expose un endpoint MCP (Streamable HTTP). Chaque client s'authentifie avec la clé API d'un utilisateur Dolibarr : les actions sont effectuées avec les permissions de cet utilisateur, via l'API REST.
+DoliMcpEndpoint=URL de l'endpoint MCP
+DoliMcpTransport=Transport
+DoliMcpServerPackage=Paquet serveur MCP
+DoliMcpServerPackageMissing=Introuvable — installez le module Dalfred ou embarquez le paquet dolibarr-mcp-server
+DoliMcpRestApiModule=Module API REST (requis)
+DoliMcpClientExamples=Exemples de configuration client
+DoliMcpGenericClient=Client MCP générique
+DoliMcpAuthNote=Authentification : en-tête « Authorization: Bearer <clé API> » (recommandé) ou en-tête « DOLAPIKEY: <clé API> ».
+DoliMcpApiKeyHelp=La clé API d'un utilisateur se génère dans sa fiche : Utilisateurs & Groupes > fiche utilisateur > onglet « Clé pour API ». L'utilisateur doit avoir les permissions adaptées aux actions attendues.
