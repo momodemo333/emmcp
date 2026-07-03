@@ -50,7 +50,7 @@ class modDoliMcp extends DolibarrModules
 		$this->descriptiondetail = 'DoliMcpDescriptionDetail';
 		$this->editor_name = 'E-dem';
 		$this->editor_url = 'https://www.e-dem.com';
-		$this->version = '0.1.0';
+		$this->version = '0.2.0';
 		$this->const_name = 'MAIN_MODULE_'.strtoupper($this->name);
 		$this->picto = 'technic';
 
@@ -87,6 +87,12 @@ class modDoliMcp extends DolibarrModules
 	 */
 	public function init($options = '')
 	{
+		// Create OAuth tables (llx_dolimcp_oauth_client, llx_dolimcp_oauth_token)
+		$result = $this->_load_tables('/dolimcp/sql/');
+		if ($result < 0) {
+			return -1;
+		}
+
 		$sql = array();
 
 		return $this->_init($sql, $options);

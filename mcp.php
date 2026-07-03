@@ -79,6 +79,10 @@ if (!$res) {
 /**
  * Emit a JSON-RPC style error and exit.
  *
+ * On 401, a WWW-Authenticate header advertises the Protected Resource
+ * Metadata URL so OAuth-capable MCP clients (claude.ai connectors…) can
+ * run the discovery + authorization flow (RFC 9728 §5.1).
+ *
  * @param int    $httpCode HTTP status code
  * @param int    $rpcCode  JSON-RPC error code
  * @param string $message  Error message
@@ -86,6 +90,11 @@ if (!$res) {
  */
 function dolimcp_error($httpCode, $rpcCode, $message)
 {
+	if ($httpCode == 401) {
+		dol_include_once('/dolimcp/lib/dolimcp.lib.php');
+		$prm = dolimcpPublicUrl('/dolimcp/oauth.php').'/.well-known/oauth-protected-resource';
+		header('WWW-Authenticate: Bearer resource_metadata="'.$prm.'", scope="dolibarr"');
+	}
 	http_response_code($httpCode);
 	header('Content-Type: application/json');
 	print json_encode(array(
@@ -131,7 +140,30 @@ if (empty($apiKey)) {
 $apiKey = dol_string_nounprintableascii($apiKey);
 
 if (empty($apiKey) || preg_match('/^dolcrypt:/i', $apiKey)) {
-	dolimcp_error(401, -32001, 'Missing or invalid API key. Provide it with "Authorization: Bearer <key>" or a "DOLAPIKEY" header.');
+	dolimcp_error(401, -32001, 'Missing or invalid credentials. Provide a Dolibarr API key ("Authorization: Bearer <key>" or "DOLAPIKEY" header), or authenticate through OAuth.');
+}
+
+// --- OAuth access token path -----------------------------------------------
+// Tokens issued by oauth.php are opaque values prefixed "dmcp_a". They map
+// to the Dolibarr user who granted consent; the request then proceeds with
+// that user's REST API key.
+if (str_starts_with($apiKey, 'dmcp_a')) {
+	dol_include_once('/dolimcp/class/dolimcpoauthserver.class.php');
+	$oauthServer = new DoliMcpOAuthServer($db);
+
+	$tokenRow = $oauthServer->validateAccessToken($apiKey);
+	if (!$tokenRow) {
+		dol_syslog('[DOLIMCP] OAuth access token rejected (unknown, expired or revoked)', LOG_NOTICE);
+		dolimcp_error(401, -32001, 'Invalid or expired access token');
+	}
+
+	$userApiKey = $oauthServer->getUserApiKey((int) $tokenRow->fk_user);
+	if ($userApiKey === null) {
+		dol_syslog('[DOLIMCP] OAuth token valid but user API key unavailable: '.$oauthServer->error, LOG_ERR);
+		dolimcp_error(403, -32001, 'Access token valid but the linked Dolibarr user is unavailable');
+	}
+
+	$apiKey = $userApiKey; // downstream flow is identical to direct API key auth
 }
 
 // Validate against llx_user, same lookup as the native REST API

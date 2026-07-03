@@ -41,7 +41,8 @@ if (!$user->admin) {
 	accessforbidden();
 }
 
-$mcpEndpoint = dol_buildpath('/dolimcp/mcp.php', 2); // full URL
+$mcpEndpoint = dolimcpPublicUrl('/dolimcp/mcp.php'); // full URL (https)
+$oauthMetadata = dolimcpPublicUrl('/dolimcp/oauth.php').'/.well-known/oauth-authorization-server';
 $autoload = dolimcpFindMcpAutoloader();
 $apiEnabled = isModEnabled('api');
 
@@ -68,6 +69,12 @@ print '<td><strong><a href="'.dol_escape_htmltag($mcpEndpoint).'" target="_blank
 
 print '<tr class="oddeven"><td>'.$langs->trans('DoliMcpTransport').'</td>';
 print '<td>Streamable HTTP (MCP) — POST JSON-RPC 2.0</td></tr>';
+
+print '<tr class="oddeven"><td>'.$langs->trans('DoliMcpAuthMethods').'</td>';
+print '<td>'.$langs->trans('DoliMcpAuthMethodsValue').'</td></tr>';
+
+print '<tr class="oddeven"><td>'.$langs->trans('DoliMcpOAuthMetadata').'</td>';
+print '<td><a href="'.dol_escape_htmltag($oauthMetadata).'" target="_blank" rel="noopener">'.dol_escape_htmltag($oauthMetadata).'</a></td></tr>';
 
 print '<tr class="oddeven"><td>'.$langs->trans('DoliMcpServerPackage').'</td>';
 print '<td>'.($autoload ? img_picto('', 'tick').' '.dol_escape_htmltag($autoload) : img_picto('', 'error').' '.$langs->trans('DoliMcpServerPackageMissing')).'</td></tr>';
@@ -101,6 +108,9 @@ print dol_escape_htmltag(json_encode(array(
 	),
 ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 print '</pre>';
+
+print '<strong>Claude.ai ('.$langs->trans('DoliMcpConnectorOAuth').') :</strong>';
+print '<div class="opacitymedium">'.$langs->trans('DoliMcpConnectorOAuthHelp', $mcpEndpoint).'</div><br>';
 
 print '<div class="info">'.$langs->trans('DoliMcpApiKeyHelp').'</div>';
 

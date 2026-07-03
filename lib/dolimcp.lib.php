@@ -46,6 +46,34 @@ function dolimcpAdminPrepareHead()
 }
 
 /**
+ * Build a public absolute URL for a module file, forcing https when the
+ * current request reached us over TLS.
+ *
+ * dol_buildpath(..., 2) derives the scheme from DOL_MAIN_URL_ROOT, which is
+ * often http when Dolibarr sits behind a TLS-terminating reverse proxy
+ * (Traefik, nginx). OAuth 2.1 / the MCP authorization spec require https for
+ * every endpoint and redirect URI (localhost excepted), so we upgrade the
+ * scheme based on the real request when it was encrypted.
+ *
+ * @param string $relpath Module-relative path, e.g. '/dolimcp/oauth.php'
+ * @return string Absolute URL
+ */
+function dolimcpPublicUrl($relpath)
+{
+	$url = dol_buildpath($relpath, 2);
+
+	$isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+		|| (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https')
+		|| ((int) ($_SERVER['SERVER_PORT'] ?? 0) === 443);
+
+	if ($isHttps && str_starts_with($url, 'http://')) {
+		$url = 'https://'.substr($url, 7);
+	}
+
+	return $url;
+}
+
+/**
  * Resolve the autoloader of the embedded Dolibarr MCP server package.
  *
  * @return string|null Absolute path to autoload.php, or null if not found
