@@ -1,3 +1,5 @@
 vendor/
+build/
+releases/
 *.log
 .DS_Store
