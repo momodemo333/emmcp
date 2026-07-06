@@ -1,5 +1,5 @@
--- DoliMCP OAuth 2.1 registered clients (RFC 7591 Dynamic Client Registration)
-CREATE TABLE llx_dolimcp_oauth_client(
+-- emMCP OAuth 2.1 registered clients (RFC 7591 Dynamic Client Registration)
+CREATE TABLE llx_emmcp_oauth_client(
 	rowid integer AUTO_INCREMENT PRIMARY KEY,
 	client_id varchar(80) NOT NULL,
 	client_secret_hash varchar(128) NULL,

@@ -16,9 +16,9 @@
  */
 
 /**
- * \file    lib/dolimcp.lib.php
- * \ingroup dolimcp
- * \brief   Library files with common functions for DoliMCP
+ * \file    lib/emmcp.lib.php
+ * \ingroup emmcp
+ * \brief   Library files with common functions for emMCP
  */
 
 /**
@@ -26,26 +26,26 @@
  *
  * @return array
  */
-function dolimcpAdminPrepareHead()
+function emmcpAdminPrepareHead()
 {
 	global $langs, $conf;
 
-	$langs->load('dolimcp@dolimcp');
+	$langs->load('emmcp@emmcp');
 
 	$h = 0;
 	$head = array();
 
-	$head[$h][0] = dol_buildpath('/dolimcp/admin/setup.php', 1);
+	$head[$h][0] = dol_buildpath('/emmcp/admin/setup.php', 1);
 	$head[$h][1] = $langs->trans('Settings');
 	$head[$h][2] = 'settings';
 	$h++;
 
-	$head[$h][0] = dol_buildpath('/dolimcp/admin/about.php', 1);
+	$head[$h][0] = dol_buildpath('/emmcp/admin/about.php', 1);
 	$head[$h][1] = $langs->trans('About');
 	$head[$h][2] = 'about';
 	$h++;
 
-	complete_head_from_modules($conf, $langs, null, $head, $h, 'dolimcp@dolimcp');
+	complete_head_from_modules($conf, $langs, null, $head, $h, 'emmcp@emmcp');
 
 	return $head;
 }
@@ -62,7 +62,7 @@ function dolimcpAdminPrepareHead()
  * @param string $label Optional heading shown above the block
  * @return string HTML
  */
-function dolimcpCodeBlock($code, $label = '')
+function emmcpCodeBlock($code, $label = '')
 {
 	$html = '';
 	if ($label !== '') {
@@ -71,7 +71,7 @@ function dolimcpCodeBlock($code, $label = '')
 		$html .= showValueWithClipboardCPButton($code, 0, 'none');
 		$html .= '</div>';
 	}
-	$html .= '<pre class="dolimcp-code">'.htmlspecialchars($code, ENT_QUOTES, 'UTF-8').'</pre>';
+	$html .= '<pre class="emmcp-code">'.htmlspecialchars($code, ENT_QUOTES, 'UTF-8').'</pre>';
 
 	return $html;
 }
@@ -86,10 +86,10 @@ function dolimcpCodeBlock($code, $label = '')
  * every endpoint and redirect URI (localhost excepted), so we upgrade the
  * scheme based on the real request when it was encrypted.
  *
- * @param string $relpath Module-relative path, e.g. '/dolimcp/oauth.php'
+ * @param string $relpath Module-relative path, e.g. '/emmcp/oauth.php'
  * @return string Absolute URL
  */
-function dolimcpPublicUrl($relpath)
+function emmcpPublicUrl($relpath)
 {
 	$url = dol_buildpath($relpath, 2);
 
@@ -109,10 +109,10 @@ function dolimcpPublicUrl($relpath)
  *
  * @return string|null Absolute path to autoload.php, or null if not found
  */
-function dolimcpFindMcpAutoloader()
+function emmcpFindMcpAutoloader()
 {
 	$candidates = array(
-		dol_buildpath('/dolimcp/vendor/dolibarr-mcp-server/vendor/autoload.php', 0),
+		dol_buildpath('/emmcp/vendor/dolibarr-mcp-server/vendor/autoload.php', 0),
 		dol_buildpath('/dalfred/dolibarr-mcp-server/vendor/autoload.php', 0),
 	);
 	foreach ($candidates as $candidate) {

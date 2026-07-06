@@ -17,7 +17,7 @@
 
 /**
  * \file    mcp.php
- * \ingroup dolimcp
+ * \ingroup emmcp
  * \brief   MCP Streamable HTTP endpoint (per-request, PHP-FPM friendly).
  *
  * One HTTP request = one JSON-RPC MCP message, handled by the official
@@ -88,11 +88,11 @@ if (!$res) {
  * @param string $message  Error message
  * @return never
  */
-function dolimcp_error($httpCode, $rpcCode, $message)
+function emmcp_error($httpCode, $rpcCode, $message)
 {
 	if ($httpCode == 401) {
-		dol_include_once('/dolimcp/lib/dolimcp.lib.php');
-		$prm = dolimcpPublicUrl('/dolimcp/oauth.php').'/.well-known/oauth-protected-resource';
+		dol_include_once('/emmcp/lib/emmcp.lib.php');
+		$prm = emmcpPublicUrl('/emmcp/oauth.php').'/.well-known/oauth-protected-resource';
 		header('WWW-Authenticate: Bearer resource_metadata="'.$prm.'", scope="dolibarr"');
 	}
 	http_response_code($httpCode);
@@ -105,8 +105,8 @@ function dolimcp_error($httpCode, $rpcCode, $message)
 	exit;
 }
 
-if (!isModEnabled('dolimcp')) {
-	dolimcp_error(403, -32000, 'Module DoliMCP not enabled');
+if (!isModEnabled('emmcp')) {
+	emmcp_error(403, -32000, 'Module emMCP not enabled');
 }
 
 // --- Authentication -------------------------------------------------------
@@ -140,27 +140,27 @@ if (empty($apiKey)) {
 $apiKey = dol_string_nounprintableascii($apiKey);
 
 if (empty($apiKey) || preg_match('/^dolcrypt:/i', $apiKey)) {
-	dolimcp_error(401, -32001, 'Missing or invalid credentials. Provide a Dolibarr API key ("Authorization: Bearer <key>" or "DOLAPIKEY" header), or authenticate through OAuth.');
+	emmcp_error(401, -32001, 'Missing or invalid credentials. Provide a Dolibarr API key ("Authorization: Bearer <key>" or "DOLAPIKEY" header), or authenticate through OAuth.');
 }
 
 // --- OAuth access token path -----------------------------------------------
-// Tokens issued by oauth.php are opaque values prefixed "dmcp_a". They map
+// Tokens issued by oauth.php are opaque values prefixed "emcp_a". They map
 // to the Dolibarr user who granted consent; the request then proceeds with
 // that user's REST API key.
-if (str_starts_with($apiKey, 'dmcp_a')) {
-	dol_include_once('/dolimcp/class/dolimcpoauthserver.class.php');
-	$oauthServer = new DoliMcpOAuthServer($db);
+if (str_starts_with($apiKey, 'emcp_a')) {
+	dol_include_once('/emmcp/class/emmcpoauthserver.class.php');
+	$oauthServer = new EmmcpOAuthServer($db);
 
 	$tokenRow = $oauthServer->validateAccessToken($apiKey);
 	if (!$tokenRow) {
-		dol_syslog('[DOLIMCP] OAuth access token rejected (unknown, expired or revoked)', LOG_NOTICE);
-		dolimcp_error(401, -32001, 'Invalid or expired access token');
+		dol_syslog('[EMMCP] OAuth access token rejected (unknown, expired or revoked)', LOG_NOTICE);
+		emmcp_error(401, -32001, 'Invalid or expired access token');
 	}
 
 	$userApiKey = $oauthServer->getUserApiKey((int) $tokenRow->fk_user);
 	if ($userApiKey === null) {
-		dol_syslog('[DOLIMCP] OAuth token valid but user API key unavailable: '.$oauthServer->error, LOG_ERR);
-		dolimcp_error(403, -32001, 'Access token valid but the linked Dolibarr user is unavailable');
+		dol_syslog('[EMMCP] OAuth token valid but user API key unavailable: '.$oauthServer->error, LOG_ERR);
+		emmcp_error(403, -32001, 'Access token valid but the linked Dolibarr user is unavailable');
 	}
 
 	$apiKey = $userApiKey; // downstream flow is identical to direct API key auth
@@ -175,25 +175,25 @@ $sql .= " OR u.api_key = '".$db->escape(dolEncrypt($apiKey, '', '', 'dolibarr'))
 
 $resql = $db->query($sql);
 if (!$resql || $db->num_rows($resql) != 1) {
-	dol_syslog('[DOLIMCP] Authentication KO: no unique user for provided api key', LOG_NOTICE);
+	dol_syslog('[EMMCP] Authentication KO: no unique user for provided api key', LOG_NOTICE);
 	sleep(1); // Anti brute force, same delay as the native REST API
-	dolimcp_error(401, -32001, 'Error user not valid (not found with api key or bad status)');
+	emmcp_error(401, -32001, 'Error user not valid (not found with api key or bad status)');
 }
 $obj = $db->fetch_object($resql);
 if (empty($obj->status)) {
-	dol_syslog('[DOLIMCP] Authentication KO: user '.$obj->login.' is disabled', LOG_NOTICE);
+	dol_syslog('[EMMCP] Authentication KO: user '.$obj->login.' is disabled', LOG_NOTICE);
 	sleep(1);
-	dolimcp_error(401, -32001, 'Error user not valid (not found with api key or bad status)');
+	emmcp_error(401, -32001, 'Error user not valid (not found with api key or bad status)');
 }
 
-dol_syslog('[DOLIMCP] MCP request authenticated for user '.$obj->login, LOG_DEBUG);
+dol_syslog('[EMMCP] MCP request authenticated for user '.$obj->login, LOG_DEBUG);
 
 // --- Load the Dolibarr MCP server package ----------------------------------
 
 // POC: reuse the MCP server embedded in the Dalfred module. A standalone
-// release of DoliMCP will bundle its own copy under /dolimcp/vendor/.
+// release of emMCP will bundle its own copy under /emmcp/vendor/.
 $autoloadCandidates = array(
-	dol_buildpath('/dolimcp/vendor/dolibarr-mcp-server/vendor/autoload.php', 0),
+	dol_buildpath('/emmcp/vendor/dolibarr-mcp-server/vendor/autoload.php', 0),
 	dol_buildpath('/dalfred/dolibarr-mcp-server/vendor/autoload.php', 0),
 );
 $autoload = null;
@@ -204,7 +204,7 @@ foreach ($autoloadCandidates as $candidate) {
 	}
 }
 if (!$autoload) {
-	dolimcp_error(500, -32002, 'Dolibarr MCP server package not found (install the Dalfred module or bundle the package)');
+	emmcp_error(500, -32002, 'Dolibarr MCP server package not found (install the Dalfred module or bundle the package)');
 }
 require_once $autoload;
 
@@ -216,14 +216,14 @@ require_once $autoload;
 $config = new DolibarrMcp\Config\ConnectionConfig(DOL_MAIN_URL_ROOT, $apiKey);
 
 // Persist MCP sessions between PHP-FPM requests
-$sessionDir = DOL_DATA_ROOT.'/dolimcp/sessions';
+$sessionDir = DOL_DATA_ROOT.'/emmcp/sessions';
 
 try {
 	$response = DolibarrMcp\Bootstrap::handleHttpRequest(null, $sessionDir, $config);
 	DolibarrMcp\Bootstrap::emit($response);
 } catch (Throwable $e) {
-	dol_syslog('[DOLIMCP] ERROR '.$e->getMessage(), LOG_ERR);
-	dolimcp_error(500, -32603, 'Internal MCP server error: '.$e->getMessage());
+	dol_syslog('[EMMCP] ERROR '.$e->getMessage(), LOG_ERR);
+	emmcp_error(500, -32603, 'Internal MCP server error: '.$e->getMessage());
 }
 
 $db->close();

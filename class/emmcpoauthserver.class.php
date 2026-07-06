@@ -16,8 +16,8 @@
  */
 
 /**
- * \file    class/dolimcpoauthserver.class.php
- * \ingroup dolimcp
+ * \file    class/emmcpoauthserver.class.php
+ * \ingroup emmcp
  * \brief   Minimal OAuth 2.1 authorization server for the MCP endpoint.
  *
  * Implements the subset required by the MCP authorization spec:
@@ -26,12 +26,12 @@
  * strings; only their sha256 hash is stored.
  */
 
-class DoliMcpOAuthServer
+class EmmcpOAuthServer
 {
 	const ACCESS_TOKEN_TTL = 3600;          // 1 hour
 	const REFRESH_TOKEN_TTL = 2592000;      // 30 days
 	const AUTH_CODE_TTL = 120;              // 2 minutes
-	const TOKEN_PREFIX = 'dmcp_';
+	const TOKEN_PREFIX = 'emcp_';
 
 	/** @var DoliDB */
 	public $db;
@@ -87,7 +87,7 @@ class DoliMcpOAuthServer
 
 		$clientName = dol_trunc((string) ($metadata['client_name'] ?? ''), 250);
 
-		$sql = "INSERT INTO ".MAIN_DB_PREFIX."dolimcp_oauth_client";
+		$sql = "INSERT INTO ".MAIN_DB_PREFIX."emmcp_oauth_client";
 		$sql .= " (client_id, client_secret_hash, client_name, redirect_uris, token_endpoint_auth_method, entity, datec)";
 		$sql .= " VALUES ('".$this->db->escape($clientId)."',";
 		$sql .= " ".($secretHash ? "'".$this->db->escape($secretHash)."'" : "NULL").",";
@@ -102,7 +102,7 @@ class DoliMcpOAuthServer
 			return null;
 		}
 
-		dol_syslog('[DOLIMCP] OAuth client registered: '.$clientId.' ('.$clientName.')', LOG_INFO);
+		dol_syslog('[EMMCP] OAuth client registered: '.$clientId.' ('.$clientName.')', LOG_INFO);
 
 		$response = array(
 			'client_id' => $clientId,
@@ -129,7 +129,7 @@ class DoliMcpOAuthServer
 	public function getClient($clientId)
 	{
 		$sql = "SELECT rowid, client_id, client_secret_hash, client_name, redirect_uris, token_endpoint_auth_method";
-		$sql .= " FROM ".MAIN_DB_PREFIX."dolimcp_oauth_client";
+		$sql .= " FROM ".MAIN_DB_PREFIX."emmcp_oauth_client";
 		$sql .= " WHERE client_id = '".$this->db->escape($clientId)."'";
 
 		$resql = $this->db->query($sql);
@@ -338,7 +338,7 @@ class DoliMcpOAuthServer
 			$this->error = 'Failed to generate API key: '.$this->db->lasterror();
 			return null;
 		}
-		dol_syslog('[DOLIMCP] Generated REST API key for user '.$userId.' (OAuth consent)', LOG_INFO);
+		dol_syslog('[EMMCP] Generated REST API key for user '.$userId.' (OAuth consent)', LOG_INFO);
 
 		return $key;
 	}
@@ -350,7 +350,7 @@ class DoliMcpOAuthServer
 	 */
 	public function purgeExpired()
 	{
-		$sql = "DELETE FROM ".MAIN_DB_PREFIX."dolimcp_oauth_token";
+		$sql = "DELETE FROM ".MAIN_DB_PREFIX."emmcp_oauth_token";
 		$sql .= " WHERE expires_at < '".$this->db->idate(dol_now() - 86400)."'";
 		$this->db->query($sql);
 	}
@@ -408,7 +408,7 @@ class DoliMcpOAuthServer
 	{
 		global $conf;
 
-		$sql = "INSERT INTO ".MAIN_DB_PREFIX."dolimcp_oauth_token";
+		$sql = "INSERT INTO ".MAIN_DB_PREFIX."emmcp_oauth_token";
 		$sql .= " (token_type, token_hash, fk_client, fk_user, scope, resource, code_challenge, redirect_uri, expires_at, revoked, entity, datec)";
 		$sql .= " VALUES ('".$this->db->escape($type)."',";
 		$sql .= " '".$this->db->escape(hash('sha256', $token))."',";
@@ -424,7 +424,7 @@ class DoliMcpOAuthServer
 		$sql .= " '".$this->db->idate(dol_now())."')";
 
 		if (!$this->db->query($sql)) {
-			dol_syslog('[DOLIMCP] ERROR insertToken: '.$this->db->lasterror(), LOG_ERR);
+			dol_syslog('[EMMCP] ERROR insertToken: '.$this->db->lasterror(), LOG_ERR);
 			return false;
 		}
 		return true;
@@ -444,7 +444,7 @@ class DoliMcpOAuthServer
 		}
 
 		$sql = "SELECT rowid, token_type, fk_client, fk_user, scope, resource, code_challenge, redirect_uri, expires_at, revoked";
-		$sql .= " FROM ".MAIN_DB_PREFIX."dolimcp_oauth_token";
+		$sql .= " FROM ".MAIN_DB_PREFIX."emmcp_oauth_token";
 		$sql .= " WHERE token_type = '".$this->db->escape($type)."'";
 		$sql .= " AND token_hash = '".$this->db->escape(hash('sha256', $token))."'";
 		$sql .= " AND revoked = 0";
@@ -465,7 +465,7 @@ class DoliMcpOAuthServer
 	 */
 	private function revokeToken($rowid)
 	{
-		$sql = "UPDATE ".MAIN_DB_PREFIX."dolimcp_oauth_token SET revoked = 1 WHERE rowid = ".((int) $rowid);
+		$sql = "UPDATE ".MAIN_DB_PREFIX."emmcp_oauth_token SET revoked = 1 WHERE rowid = ".((int) $rowid);
 		$this->db->query($sql);
 	}
 }

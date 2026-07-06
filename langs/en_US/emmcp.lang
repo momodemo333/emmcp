@@ -1,0 +1,52 @@
+# Dolibarr language file - en_US - emmcp
+EmmcpName=emMCP
+EmmcpDescription=Remote MCP server for Dolibarr
+EmmcpDescriptionDetail=Exposes your Dolibarr as an MCP (Model Context Protocol) server over HTTP. Connect Claude, Claude Code or any MCP-compatible AI agent to your ERP: browse and manage third parties, invoices, products, orders, projects, documents… with the permissions of the user tied to the API key.
+EmmcpSetup=emMCP setup
+EmmcpSetupIntro=This module exposes an MCP endpoint (Streamable HTTP). Each client authenticates with a Dolibarr user's API key, or via OAuth 2.1 for claude.ai connectors: either way, actions are performed with that user's permissions, through the REST API.
+
+# Status board
+EmmcpEndpoint=MCP endpoint URL
+EmmcpTransport=Transport
+EmmcpAuthMethods=Authentication methods
+EmmcpAuthMethodsValue=Dolibarr API key (Bearer / DOLAPIKEY) or OAuth 2.1 (claude.ai connectors)
+EmmcpOAuthMetadata=OAuth metadata (authorization server)
+EmmcpServerPackage=MCP server package
+EmmcpServerPackageOk=Present
+EmmcpServerPackageMissing=Not found — reinstall the module (the package must be bundled under vendor/)
+EmmcpRestApiModule=REST API module (required)
+EmmcpRestApiMissing=Disabled — enable Dolibarr's "REST API" module
+
+# Client examples
+EmmcpClientExamples=Connect a client
+EmmcpRecommended=Recommended
+EmmcpClientClaudeAi=Claude.ai (custom connector)
+EmmcpConnectorOAuthHelp=In claude.ai: Settings → Connectors → "Add custom connector", then enter the URL below. Claude automatically discovers OAuth authentication, signs you in with your Dolibarr account and asks for your consent — no key to copy.
+EmmcpConnectorUrlLabel=Connector URL
+EmmcpClientClaudeCode=Claude Code
+EmmcpAuthNote=API key authentication: "Authorization: Bearer <API key>" header (recommended) or "DOLAPIKEY: <API key>" header.
+EmmcpCommandLabel=Command
+EmmcpClientGeneric=Generic MCP client (mcp.json)
+EmmcpYourApiKey=YOUR_API_KEY
+EmmcpApiKeyHelp=A user's API key is generated on their card: Users & Groups → user card → "API key" tab. The user must have the permissions matching the expected actions, since the agent acts with their rights.
+
+# OAuth consent screen
+EmmcpOAuthConsentTitle=Authorize access to Dolibarr
+EmmcpOAuthConsentIntro=The application %s is requesting permission to access your Dolibarr with your account %s.
+EmmcpOAuthConsentScope1=Read and manage the data your account has access to (third parties, invoices, products, documents…)
+EmmcpOAuthConsentScope2=Act through the REST API with your Dolibarr permissions — nothing more than what you can already do
+EmmcpOAuthAccept=Authorize
+EmmcpOAuthDeny=Deny
+
+# About page
+EmmcpCompatibility=Compatibility
+EmmcpCapabilities=Capabilities
+EmmcpCapaEndpoint=Remote MCP endpoint (Streamable HTTP, per-request — no daemon, shared-hosting friendly)
+EmmcpCapaTools=Generic tools covering all of Dolibarr through the REST API (third parties, invoices, products, orders, documents, projects…) with a dynamic API explorer
+EmmcpCapaGuides=Dolibarr usage guides served as MCP resources, so the agent knows the best practices and avoids the API's pitfalls
+EmmcpCapaApiKey=API key authentication (Claude Code, Anthropic API, header-based MCP clients)
+EmmcpCapaOauth=OAuth 2.1 authentication with consent (claude.ai custom connectors)
+EmmcpResources=Resources
+EmmcpChangelog=Changelog
+EmmcpAboutMcp=About the Model Context Protocol
+EmmcpEditor=Publisher

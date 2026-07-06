@@ -17,10 +17,10 @@
 
 /**
  * \file    oauth.php
- * \ingroup dolimcp
+ * \ingroup emmcp
  * \brief   OAuth 2.1 authorization server front controller for the MCP endpoint.
  *
- * Routes (via PATH_INFO, e.g. /custom/dolimcp/oauth.php/token):
+ * Routes (via PATH_INFO, e.g. /custom/emmcp/oauth.php/token):
  *   GET  /.well-known/openid-configuration        AS metadata (RFC 8414 / OIDC flavor)
  *   GET  /.well-known/oauth-authorization-server  AS metadata (RFC 8414)
  *   GET  /.well-known/oauth-protected-resource    Protected Resource Metadata (RFC 9728)
@@ -37,15 +37,15 @@
 
 // Resolve the route before main.inc.php: everything except /authorize runs
 // machine-to-machine (no session, no CSRF token, no login redirect).
-$dolimcp_route = '';
+$emmcp_route = '';
 if (!empty($_SERVER['PATH_INFO'])) {
-	$dolimcp_route = $_SERVER['PATH_INFO'];
+	$emmcp_route = $_SERVER['PATH_INFO'];
 } elseif (!empty($_GET['route'])) {
-	$dolimcp_route = '/'.ltrim((string) $_GET['route'], '/');
+	$emmcp_route = '/'.ltrim((string) $_GET['route'], '/');
 }
-$dolimcp_route = rtrim($dolimcp_route, '/');
+$emmcp_route = rtrim($emmcp_route, '/');
 
-if ($dolimcp_route !== '/authorize') {
+if ($emmcp_route !== '/authorize') {
 	if (!defined('NOLOGIN')) {
 		define('NOLOGIN', '1');
 	}
@@ -84,16 +84,16 @@ if (!$res) {
 	die('{"error":"server_error","error_description":"Main include failed"}');
 }
 
-dol_include_once('/dolimcp/class/dolimcpoauthserver.class.php');
-dol_include_once('/dolimcp/lib/dolimcp.lib.php');
+dol_include_once('/emmcp/class/emmcpoauthserver.class.php');
+dol_include_once('/emmcp/lib/emmcp.lib.php');
 
-if (!isModEnabled('dolimcp')) {
-	dolimcp_oauth_json(array('error' => 'server_error', 'error_description' => 'Module DoliMCP not enabled'), 503);
+if (!isModEnabled('emmcp')) {
+	emmcp_oauth_json(array('error' => 'server_error', 'error_description' => 'Module emMCP not enabled'), 503);
 }
 
-$issuer = dolimcpPublicUrl('/dolimcp/oauth.php');
-$mcpUrl = dolimcpPublicUrl('/dolimcp/mcp.php');
-$oauthServer = new DoliMcpOAuthServer($db);
+$issuer = emmcpPublicUrl('/emmcp/oauth.php');
+$mcpUrl = emmcpPublicUrl('/emmcp/mcp.php');
+$oauthServer = new EmmcpOAuthServer($db);
 
 /**
  * Send a JSON response and exit.
@@ -102,7 +102,7 @@ $oauthServer = new DoliMcpOAuthServer($db);
  * @param int   $httpCode HTTP status
  * @return never
  */
-function dolimcp_oauth_json($payload, $httpCode = 200)
+function emmcp_oauth_json($payload, $httpCode = 200)
 {
 	top_httphead('application/json');
 	http_response_code($httpCode);
@@ -122,12 +122,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 	exit;
 }
 
-switch ($dolimcp_route) {
+switch ($emmcp_route) {
 	// --- Discovery ---------------------------------------------------------
 
 	case '/.well-known/openid-configuration':
 	case '/.well-known/oauth-authorization-server':
-		dolimcp_oauth_json(array(
+		emmcp_oauth_json(array(
 			'issuer' => $issuer,
 			'authorization_endpoint' => $issuer.'/authorize',
 			'token_endpoint' => $issuer.'/token',
@@ -139,10 +139,10 @@ switch ($dolimcp_route) {
 			'scopes_supported' => array('dolibarr'),
 			'service_documentation' => 'https://github.com/momodemo333/dolibarr-mcp-server',
 		));
-		// no break (dolimcp_oauth_json exits)
+		// no break (emmcp_oauth_json exits)
 
 	case '/.well-known/oauth-protected-resource':
-		dolimcp_oauth_json(array(
+		emmcp_oauth_json(array(
 			'resource' => $mcpUrl,
 			'authorization_servers' => array($issuer),
 			'scopes_supported' => array('dolibarr'),
@@ -155,24 +155,24 @@ switch ($dolimcp_route) {
 
 	case '/register':
 		if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-			dolimcp_oauth_json(array('error' => 'invalid_request', 'error_description' => 'POST required'), 405);
+			emmcp_oauth_json(array('error' => 'invalid_request', 'error_description' => 'POST required'), 405);
 		}
 		$body = json_decode((string) file_get_contents('php://input'), true);
 		if (!is_array($body)) {
-			dolimcp_oauth_json(array('error' => 'invalid_client_metadata', 'error_description' => 'Invalid JSON body'), 400);
+			emmcp_oauth_json(array('error' => 'invalid_client_metadata', 'error_description' => 'Invalid JSON body'), 400);
 		}
 		$response = $oauthServer->registerClient($body);
 		if ($response === null) {
-			dolimcp_oauth_json(array('error' => 'invalid_client_metadata', 'error_description' => $oauthServer->error), 400);
+			emmcp_oauth_json(array('error' => 'invalid_client_metadata', 'error_description' => $oauthServer->error), 400);
 		}
-		dolimcp_oauth_json($response, 201);
+		emmcp_oauth_json($response, 201);
 		// no break
 
 	// --- Token endpoint ------------------------------------------------------
 
 	case '/token':
 		if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-			dolimcp_oauth_json(array('error' => 'invalid_request', 'error_description' => 'POST required'), 405);
+			emmcp_oauth_json(array('error' => 'invalid_request', 'error_description' => 'POST required'), 405);
 		}
 
 		$grantType = (string) GETPOST('grant_type', 'alphanohtml');
@@ -187,10 +187,10 @@ switch ($dolimcp_route) {
 
 		$client = $oauthServer->getClient($clientId);
 		if (!$client) {
-			dolimcp_oauth_json(array('error' => 'invalid_client'), 401);
+			emmcp_oauth_json(array('error' => 'invalid_client'), 401);
 		}
 		if (!$oauthServer->authenticateClient($client, $clientSecret)) {
-			dolimcp_oauth_json(array('error' => 'invalid_client'), 401);
+			emmcp_oauth_json(array('error' => 'invalid_client'), 401);
 		}
 
 		$oauthServer->purgeExpired();
@@ -205,14 +205,14 @@ switch ($dolimcp_route) {
 		} elseif ($grantType === 'refresh_token') {
 			$tokens = $oauthServer->refreshTokens($client, (string) GETPOST('refresh_token', 'alphanohtml'));
 		} else {
-			dolimcp_oauth_json(array('error' => 'unsupported_grant_type'), 400);
+			emmcp_oauth_json(array('error' => 'unsupported_grant_type'), 400);
 		}
 
 		if ($tokens === null) {
-			dolimcp_oauth_json(array('error' => $oauthServer->error ?: 'invalid_grant'), 400);
+			emmcp_oauth_json(array('error' => $oauthServer->error ?: 'invalid_grant'), 400);
 		}
-		dol_syslog('[DOLIMCP] OAuth tokens issued to client '.$client->client_id.' (grant: '.$grantType.')', LOG_INFO);
-		dolimcp_oauth_json($tokens);
+		dol_syslog('[EMMCP] OAuth tokens issued to client '.$client->client_id.' (grant: '.$grantType.')', LOG_INFO);
+		emmcp_oauth_json($tokens);
 		// no break
 
 	// --- Authorization endpoint (login + consent) ----------------------------
@@ -234,7 +234,7 @@ switch ($dolimcp_route) {
 
 		// Never redirect to an unvalidated URI (open redirect protection)
 		if (!$client || !$oauthServer->isRegisteredRedirectUri($client, $redirectUri)) {
-			llxHeader('', 'DoliMCP OAuth');
+			llxHeader('', 'emMCP OAuth');
 			print '<div class="error">Invalid OAuth request: unknown client_id or unregistered redirect_uri.</div>';
 			llxFooter();
 			exit;
@@ -247,7 +247,7 @@ switch ($dolimcp_route) {
 		 * @param array  $params Query parameters to append
 		 * @return never
 		 */
-		function dolimcp_oauth_redirect($uri, $params)
+		function emmcp_oauth_redirect($uri, $params)
 		{
 			$uri .= (strpos($uri, '?') === false ? '?' : '&').http_build_query($params);
 			header('Location: '.$uri, true, 302);
@@ -255,10 +255,10 @@ switch ($dolimcp_route) {
 		}
 
 		if ($responseType !== 'code') {
-			dolimcp_oauth_redirect($redirectUri, array('error' => 'unsupported_response_type', 'state' => $state));
+			emmcp_oauth_redirect($redirectUri, array('error' => 'unsupported_response_type', 'state' => $state));
 		}
 		if (empty($codeChallenge) || strtoupper($codeChallengeMethod) !== 'S256') {
-			dolimcp_oauth_redirect($redirectUri, array('error' => 'invalid_request', 'error_description' => 'PKCE S256 required', 'state' => $state));
+			emmcp_oauth_redirect($redirectUri, array('error' => 'invalid_request', 'error_description' => 'PKCE S256 required', 'state' => $state));
 		}
 
 		$action = GETPOST('action', 'aZ09');
@@ -268,30 +268,30 @@ switch ($dolimcp_route) {
 			if (GETPOST('decision', 'aZ09') === 'accept') {
 				$code = $oauthServer->createAuthorizationCode($client, (int) $user->id, $redirectUri, $codeChallenge, $scope, $resource);
 				if ($code === null) {
-					dolimcp_oauth_redirect($redirectUri, array('error' => 'server_error', 'state' => $state));
+					emmcp_oauth_redirect($redirectUri, array('error' => 'server_error', 'state' => $state));
 				}
-				dol_syslog('[DOLIMCP] OAuth consent granted by user '.$user->login.' to client '.$client->client_id, LOG_INFO);
-				dolimcp_oauth_redirect($redirectUri, array('code' => $code, 'state' => $state));
+				dol_syslog('[EMMCP] OAuth consent granted by user '.$user->login.' to client '.$client->client_id, LOG_INFO);
+				emmcp_oauth_redirect($redirectUri, array('code' => $code, 'state' => $state));
 			}
-			dol_syslog('[DOLIMCP] OAuth consent denied by user '.$user->login.' to client '.$client->client_id, LOG_INFO);
-			dolimcp_oauth_redirect($redirectUri, array('error' => 'access_denied', 'state' => $state));
+			dol_syslog('[EMMCP] OAuth consent denied by user '.$user->login.' to client '.$client->client_id, LOG_INFO);
+			emmcp_oauth_redirect($redirectUri, array('error' => 'access_denied', 'state' => $state));
 		}
 
 		// Consent screen
-		$langs->load('dolimcp@dolimcp');
-		llxHeader('', $langs->trans('DoliMcpOAuthConsentTitle'));
+		$langs->load('emmcp@emmcp');
+		llxHeader('', $langs->trans('EmmcpOAuthConsentTitle'));
 
 		$clientLabel = !empty($client->client_name) ? $client->client_name : $client->client_id;
 
 		print '<div class="center" style="max-width:600px;margin:40px auto;">';
-		print load_fiche_titre($langs->trans('DoliMcpOAuthConsentTitle'), '', 'lock');
+		print load_fiche_titre($langs->trans('EmmcpOAuthConsentTitle'), '', 'lock');
 		print '<div class="info" style="text-align:left;">';
-		print $langs->trans('DoliMcpOAuthConsentIntro', '<strong>'.dol_escape_htmltag($clientLabel).'</strong>', '<strong>'.dol_escape_htmltag($user->login).'</strong>');
+		print $langs->trans('EmmcpOAuthConsentIntro', '<strong>'.dol_escape_htmltag($clientLabel).'</strong>', '<strong>'.dol_escape_htmltag($user->login).'</strong>');
 		print '</div>';
 		print '<div style="text-align:left;margin:16px 0;">';
 		print '<ul>';
-		print '<li>'.$langs->trans('DoliMcpOAuthConsentScope1').'</li>';
-		print '<li>'.$langs->trans('DoliMcpOAuthConsentScope2').'</li>';
+		print '<li>'.$langs->trans('EmmcpOAuthConsentScope1').'</li>';
+		print '<li>'.$langs->trans('EmmcpOAuthConsentScope2').'</li>';
 		print '</ul>';
 		print '</div>';
 
@@ -301,8 +301,8 @@ switch ($dolimcp_route) {
 		foreach (array('client_id' => $clientId, 'redirect_uri' => $redirectUri, 'state' => $state, 'scope' => $scope, 'resource' => $resource, 'response_type' => $responseType, 'code_challenge' => $codeChallenge, 'code_challenge_method' => $codeChallengeMethod) as $k => $v) {
 			print '<input type="hidden" name="'.$k.'" value="'.dol_escape_htmltag($v).'">';
 		}
-		print '<button type="submit" name="decision" value="accept" class="button buttongen marginrightonly">'.$langs->trans('DoliMcpOAuthAccept').'</button>';
-		print '<button type="submit" name="decision" value="deny" class="button buttongen button-cancel">'.$langs->trans('DoliMcpOAuthDeny').'</button>';
+		print '<button type="submit" name="decision" value="accept" class="button buttongen marginrightonly">'.$langs->trans('EmmcpOAuthAccept').'</button>';
+		print '<button type="submit" name="decision" value="deny" class="button buttongen button-cancel">'.$langs->trans('EmmcpOAuthDeny').'</button>';
 		print '</form>';
 		print '</div>';
 
@@ -311,5 +311,5 @@ switch ($dolimcp_route) {
 		// no break
 
 	default:
-		dolimcp_oauth_json(array('error' => 'invalid_request', 'error_description' => 'Unknown route: '.$dolimcp_route), 404);
+		emmcp_oauth_json(array('error' => 'invalid_request', 'error_description' => 'Unknown route: '.$emmcp_route), 404);
 }

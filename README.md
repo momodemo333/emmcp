@@ -1,4 +1,4 @@
-# DoliMCP — Serveur MCP distant pour Dolibarr (POC)
+# emMCP — Serveur MCP distant pour Dolibarr (POC)
 
 Expose une instance Dolibarr comme **serveur MCP** (Model Context Protocol,
 transport Streamable HTTP) consommable par Claude Code, l'API Anthropic
@@ -6,10 +6,10 @@ transport Streamable HTTP) consommable par Claude Code, l'API Anthropic
 
 ## Fonctionnement
 
-- Endpoint unique : `https://<instance>/custom/dolimcp/mcp.php`
+- Endpoint unique : `https://<instance>/custom/emmcp/mcp.php`
 - **Par requête** (PHP-FPM/Apache) : pas de daemon, pas de ReactPHP.
   Chaque POST JSON-RPC est traité par le SDK PHP officiel MCP (`mcp/sdk`),
-  les sessions MCP sont persistées dans `documents/dolimcp/sessions/`.
+  les sessions MCP sont persistées dans `documents/emmcp/sessions/`.
 - **Authentification**, deux voies :
   - **Clé API** d'un utilisateur Dolibarr, via `Authorization: Bearer <clé>`
     (recommandé) ou header `DOLAPIKEY` — pour Claude Code, l'API Anthropic,
@@ -36,14 +36,14 @@ transport Streamable HTTP) consommable par Claude Code, l'API Anthropic
 
 ```bash
 claude mcp add dolibarr --transport http \
-  https://<instance>/custom/dolimcp/mcp.php \
+  https://<instance>/custom/emmcp/mcp.php \
   --header "Authorization: Bearer VOTRE_CLE_API"
 ```
 
 ## Exemple : connecteur claude.ai (OAuth)
 
 Dans claude.ai : Paramètres → Connecteurs → « Ajouter un connecteur
-personnalisé », URL `https://<instance>/custom/dolimcp/mcp.php`. Claude
+personnalisé », URL `https://<instance>/custom/emmcp/mcp.php`. Claude
 découvre l'OAuth, ouvre la page de connexion Dolibarr et l'écran de
 consentement, puis se connecte — sans clé à saisir.
 
@@ -58,7 +58,7 @@ consentement, puis se connecte — sans clé à saisir.
 | `/token` | Échange de code (PKCE S256) et rotation des refresh tokens |
 
 Tokens stockés en base sous forme de hash sha256 uniquement
-(`llx_dolimcp_oauth_token`) ; access token 1 h, refresh token 30 j.
+(`llx_emmcp_oauth_token`) ; access token 1 h, refresh token 30 j.
 
 ## Limites connues du POC
 

@@ -1,4 +1,4 @@
-# DoliMCP - Makefile for Release Management
+# emMCP - Makefile for Release Management
 # ==========================================
 #
 # Builds a fully self-contained ZIP: the embedded dolibarr-mcp-server package
@@ -6,8 +6,8 @@
 # unzips into htdocs/custom/ — nothing to install, no ReactPHP, no daemon.
 
 # Configuration
-MODULE_NAME := dolimcp
-MODULE_FILE := core/modules/modDoliMcp.class.php
+MODULE_NAME := emmcp
+MODULE_FILE := core/modules/modEmmcp.class.php
 RELEASE_DIR := /home/morgan/project/dolibarr/releases
 BUILD_DIR := build
 
@@ -24,10 +24,10 @@ RELEASE_FILENAME := module_$(MODULE_NAME)-$(VERSION).zip
 
 # Entrypoints that MUST be present in the built package (sanity check)
 CRITICAL_FILES := mcp.php oauth.php .htaccess \
-	core/modules/modDoliMcp.class.php \
-	admin/setup.php lib/dolimcp.lib.php \
-	class/dolimcpoauthserver.class.php \
-	sql/llx_dolimcp_oauth_token.sql \
+	core/modules/modEmmcp.class.php \
+	admin/setup.php lib/emmcp.lib.php \
+	class/emmcpoauthserver.class.php \
+	sql/llx_emmcp_oauth_token.sql \
 	vendor/dolibarr-mcp-server/LLM.md \
 	vendor/dolibarr-mcp-server/vendor/autoload.php
 
@@ -40,7 +40,7 @@ NC := \033[0m
 .PHONY: help version lint build-release check-git-clean tag release publish release-and-publish clean
 
 help:
-	@echo "DoliMCP Release Management"
+	@echo "emMCP Release Management"
 	@echo "=========================="
 	@echo ""
 	@echo "Current version: $(VERSION)"
@@ -65,7 +65,7 @@ lint:
 	@echo "$(GREEN)PHP syntax OK$(NC)"
 
 build-release:
-	@echo "$(GREEN)Building DoliMCP v$(VERSION)...$(NC)"
+	@echo "$(GREEN)Building emMCP v$(VERSION)...$(NC)"
 	@test -d "$(MCP_PACKAGE_SRC)" || (echo "$(RED)MCP package source not found: $(MCP_PACKAGE_SRC)$(NC)" && exit 1)
 	@rm -rf $(BUILD_DIR)
 	@mkdir -p $(RELEASE_DIR)

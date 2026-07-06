@@ -1,6 +1,6 @@
--- DoliMCP OAuth 2.1 grants: authorization codes, access tokens, refresh tokens.
+-- emMCP OAuth 2.1 grants: authorization codes, access tokens, refresh tokens.
 -- Only sha256 hashes are stored, never the token value itself.
-CREATE TABLE llx_dolimcp_oauth_token(
+CREATE TABLE llx_emmcp_oauth_token(
 	rowid integer AUTO_INCREMENT PRIMARY KEY,
 	token_type varchar(8) NOT NULL,
 	token_hash varchar(64) NOT NULL,

@@ -16,9 +16,9 @@
  */
 
 /**
- * \file    core/modules/modDoliMcp.class.php
- * \ingroup dolimcp
- * \brief   Descriptor of DoliMCP module — exposes Dolibarr as a remote MCP
+ * \file    core/modules/modEmmcp.class.php
+ * \ingroup emmcp
+ * \brief   Descriptor of emMCP module — exposes Dolibarr as a remote MCP
  *          server (Streamable HTTP transport) usable by Claude, agents and
  *          any MCP-compatible client.
  */
@@ -26,9 +26,9 @@
 include_once DOL_DOCUMENT_ROOT.'/core/modules/DolibarrModules.class.php';
 
 /**
- * Description and activation class for module DoliMCP
+ * Description and activation class for module emMCP
  */
-class modDoliMcp extends DolibarrModules
+class modEmmcp extends DolibarrModules
 {
 	/**
 	 * Constructor. Define names, constants, directories, boxes, permissions
@@ -42,31 +42,31 @@ class modDoliMcp extends DolibarrModules
 		$this->db = $db;
 
 		$this->numero = 491409;
-		$this->rights_class = 'dolimcp';
+		$this->rights_class = 'emmcp';
 		$this->family = 'interface';
 		$this->module_position = '90';
 		$this->name = preg_replace('/^mod/i', '', get_class($this));
-		$this->description = 'DoliMcpDescription';
-		$this->descriptiondetail = 'DoliMcpDescriptionDetail';
+		$this->description = 'EmmcpDescription';
+		$this->descriptiondetail = 'EmmcpDescriptionDetail';
 		$this->editor_name = 'E-dem';
 		$this->editor_url = 'https://www.e-dem.com';
 		$this->version = '1.0.0';
 		// Native Dolibarr "update available" check (compares this URL's answer to $this->version)
-		$this->url_last_version = 'https://www.e-dem.com/dolibarr/dolimcp/last_version.php';
+		$this->url_last_version = 'https://www.e-dem.com/dolibarr/emmcp/last_version.php';
 		$this->const_name = 'MAIN_MODULE_'.strtoupper($this->name);
 		$this->picto = 'technic';
 
 		$this->module_parts = array();
 
 		// Config pages
-		$this->config_page_url = array('setup.php@dolimcp');
+		$this->config_page_url = array('setup.php@emmcp');
 
 		// Dependencies: the MCP tools work through the Dolibarr REST API
 		$this->hidden = false;
 		$this->depends = array('modApi');
 		$this->requiredby = array();
 		$this->conflictwith = array();
-		$this->langfiles = array('dolimcp@dolimcp');
+		$this->langfiles = array('emmcp@emmcp');
 		$this->phpmin = array(8, 1);
 		$this->need_dolibarr_version = array(16, 0);
 
@@ -89,8 +89,8 @@ class modDoliMcp extends DolibarrModules
 	 */
 	public function init($options = '')
 	{
-		// Create OAuth tables (llx_dolimcp_oauth_client, llx_dolimcp_oauth_token)
-		$result = $this->_load_tables('/dolimcp/sql/');
+		// Create OAuth tables (llx_emmcp_oauth_client, llx_emmcp_oauth_token)
+		$result = $this->_load_tables('/emmcp/sql/');
 		if ($result < 0) {
 			return -1;
 		}
