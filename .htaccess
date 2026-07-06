@@ -1,0 +1,17 @@
+# Pass the HTTP Authorization header through to PHP.
+#
+# Apache with PHP-FPM/FastCGI (and some CGI setups) strips the Authorization
+# header before it reaches PHP, so OAuth Bearer tokens sent by MCP clients
+# (claude.ai connectors, Claude Code) never arrive and mcp.php answers 401.
+# These rules re-expose it as $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] /
+# $_SERVER['HTTP_AUTHORIZATION'], which mcp.php already reads.
+#
+# Harmless on servers that already pass the header (nginx, CGIPassAuth On).
+<IfModule mod_rewrite.c>
+	RewriteEngine On
+	RewriteCond %{HTTP:Authorization} .
+	RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>
+<IfModule mod_setenvif.c>
+	SetEnvIfNoCase Authorization "(.+)" HTTP_AUTHORIZATION=$1
+</IfModule>

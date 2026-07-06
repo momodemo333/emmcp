@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-06
+
+### Fixed
+- **Authentification OAuth impossible derrière Apache + PHP-FPM** : le header
+  HTTP `Authorization` était supprimé avant d'atteindre PHP, si bien que le
+  jeton Bearer émis à un connecteur claude.ai n'arrivait jamais à `mcp.php`
+  (401 « Impossible de se connecter » côté Claude, après un consentement
+  pourtant réussi). Ajout d'un `.htaccess` qui réexpose le header à PHP
+  (`RewriteRule … E=HTTP_AUTHORIZATION` + `SetEnvIfNoCase`). Sans effet sur
+  les serveurs qui transmettent déjà le header (nginx, `CGIPassAuth On`).
+  L'authentification par clé API directe n'était pas affectée sur les serveurs
+  qui transmettent l'en-tête, mais l'était par le même mécanisme là où il est
+  supprimé.
+
 ## [0.2.0] - 2026-07-06
 
 Première release packagée — proof of concept installable.

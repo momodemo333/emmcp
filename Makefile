@@ -23,7 +23,7 @@ VERSION := $(shell grep -oP "\\\$$this->version\s*=\s*'\K[^']+" $(MODULE_FILE))
 RELEASE_FILENAME := module_$(MODULE_NAME)-$(VERSION).zip
 
 # Entrypoints that MUST be present in the built package (sanity check)
-CRITICAL_FILES := mcp.php oauth.php \
+CRITICAL_FILES := mcp.php oauth.php .htaccess \
 	core/modules/modDoliMcp.class.php \
 	admin/setup.php lib/dolimcp.lib.php \
 	class/dolimcpoauthserver.class.php \
@@ -73,7 +73,7 @@ build-release:
 
 	@echo "[1/6] Copying module files..."
 	@cp -r admin class core lib sql langs $(BUILD_DIR)/$(MODULE_NAME)/
-	@cp mcp.php oauth.php README.md CHANGELOG.md $(BUILD_DIR)/$(MODULE_NAME)/
+	@cp mcp.php oauth.php README.md CHANGELOG.md .htaccess $(BUILD_DIR)/$(MODULE_NAME)/
 
 	@echo "[2/6] Bundling dolibarr-mcp-server package..."
 	@mkdir -p $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server
