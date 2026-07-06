@@ -40,9 +40,40 @@ function dolimcpAdminPrepareHead()
 	$head[$h][2] = 'settings';
 	$h++;
 
+	$head[$h][0] = dol_buildpath('/dolimcp/admin/about.php', 1);
+	$head[$h][1] = $langs->trans('About');
+	$head[$h][2] = 'about';
+	$h++;
+
 	complete_head_from_modules($conf, $langs, null, $head, $h, 'dolimcp@dolimcp');
 
 	return $head;
+}
+
+/**
+ * Render a read-only code block with a native "copy to clipboard" button.
+ *
+ * Uses htmlspecialchars (not dol_escape_htmltag) so real newlines in the
+ * snippet are preserved inside the <pre>, and Dolibarr's
+ * showValueWithClipboardCPButton() for the copy button (value carried with
+ * newlines intact via its $keepn handling).
+ *
+ * @param string $code  The snippet to display and copy (may be multi-line)
+ * @param string $label Optional heading shown above the block
+ * @return string HTML
+ */
+function dolimcpCodeBlock($code, $label = '')
+{
+	$html = '';
+	if ($label !== '') {
+		$html .= '<div class="paddingtop"><strong>'.dol_escape_htmltag($label).'</strong> ';
+		// texttoshow='none' → render only the copy button (value hidden)
+		$html .= showValueWithClipboardCPButton($code, 0, 'none');
+		$html .= '</div>';
+	}
+	$html .= '<pre class="dolimcp-code">'.htmlspecialchars($code, ENT_QUOTES, 'UTF-8').'</pre>';
+
+	return $html;
 }
 
 /**

@@ -3,24 +3,50 @@ DoliMcpName=DoliMCP
 DoliMcpDescription=Remote MCP server for Dolibarr
 DoliMcpDescriptionDetail=Exposes your Dolibarr as an MCP (Model Context Protocol) server over HTTP. Connect Claude, Claude Code or any MCP-compatible AI agent to your ERP: browse and manage third parties, invoices, products, orders, projects, documents… with the permissions of the user tied to the API key.
 DoliMcpSetup=DoliMCP setup
-DoliMcpSetupIntro=This module exposes an MCP endpoint (Streamable HTTP). Each client authenticates with a Dolibarr user's API key: actions are performed with that user's permissions, through the REST API.
+DoliMcpSetupIntro=This module exposes an MCP endpoint (Streamable HTTP). Each client authenticates with a Dolibarr user's API key, or via OAuth 2.1 for claude.ai connectors: either way, actions are performed with that user's permissions, through the REST API.
+
+# Status board
 DoliMcpEndpoint=MCP endpoint URL
 DoliMcpTransport=Transport
+DoliMcpAuthMethods=Authentication methods
+DoliMcpAuthMethodsValue=Dolibarr API key (Bearer / DOLAPIKEY) or OAuth 2.1 (claude.ai connectors)
+DoliMcpOAuthMetadata=OAuth metadata (authorization server)
 DoliMcpServerPackage=MCP server package
-DoliMcpServerPackageMissing=Not found — install the Dalfred module or bundle the dolibarr-mcp-server package
+DoliMcpServerPackageOk=Present
+DoliMcpServerPackageMissing=Not found — reinstall the module (the package must be bundled under vendor/)
 DoliMcpRestApiModule=REST API module (required)
-DoliMcpClientExamples=Client configuration examples
-DoliMcpGenericClient=Generic MCP client
-DoliMcpAuthNote=Authentication: "Authorization: Bearer <API key>" header (recommended) or "DOLAPIKEY: <API key>" header.
-DoliMcpApiKeyHelp=A user's API key is generated on their card: Users & Groups > user card > "API key" tab. The user must have the permissions matching the expected actions.
+DoliMcpRestApiMissing=Disabled — enable Dolibarr's "REST API" module
+
+# Client examples
+DoliMcpClientExamples=Connect a client
+DoliMcpRecommended=Recommended
+DoliMcpClientClaudeAi=Claude.ai (custom connector)
+DoliMcpConnectorOAuthHelp=In claude.ai: Settings → Connectors → "Add custom connector", then enter the URL below. Claude automatically discovers OAuth authentication, signs you in with your Dolibarr account and asks for your consent — no key to copy.
+DoliMcpConnectorUrlLabel=Connector URL
+DoliMcpClientClaudeCode=Claude Code
+DoliMcpAuthNote=API key authentication: "Authorization: Bearer <API key>" header (recommended) or "DOLAPIKEY: <API key>" header.
+DoliMcpCommandLabel=Command
+DoliMcpClientGeneric=Generic MCP client (mcp.json)
+DoliMcpYourApiKey=YOUR_API_KEY
+DoliMcpApiKeyHelp=A user's API key is generated on their card: Users & Groups → user card → "API key" tab. The user must have the permissions matching the expected actions, since the agent acts with their rights.
+
+# OAuth consent screen
 DoliMcpOAuthConsentTitle=Authorize access to Dolibarr
 DoliMcpOAuthConsentIntro=The application %s is requesting permission to access your Dolibarr with your account %s.
 DoliMcpOAuthConsentScope1=Read and manage the data your account has access to (third parties, invoices, products, documents…)
 DoliMcpOAuthConsentScope2=Act through the REST API with your Dolibarr permissions — nothing more than what you can already do
 DoliMcpOAuthAccept=Authorize
 DoliMcpOAuthDeny=Deny
-DoliMcpAuthMethods=Authentication methods
-DoliMcpAuthMethodsValue=Dolibarr API key (Bearer / DOLAPIKEY) or OAuth 2.1 (claude.ai connectors)
-DoliMcpOAuthMetadata=OAuth metadata (authorization server)
-DoliMcpConnectorOAuth=custom connector
-DoliMcpConnectorOAuthHelp=In claude.ai: Settings > Connectors > Add custom connector, then enter the URL %s. Claude automatically discovers OAuth authentication, signs you in with your Dolibarr account and asks for your consent — no key to copy.
+
+# About page
+DoliMcpCompatibility=Compatibility
+DoliMcpCapabilities=Capabilities
+DoliMcpCapaEndpoint=Remote MCP endpoint (Streamable HTTP, per-request — no daemon, shared-hosting friendly)
+DoliMcpCapaTools=Generic tools covering all of Dolibarr through the REST API (third parties, invoices, products, orders, documents, projects…) with a dynamic API explorer
+DoliMcpCapaGuides=Dolibarr usage guides served as MCP resources, so the agent knows the best practices and avoids the API's pitfalls
+DoliMcpCapaApiKey=API key authentication (Claude Code, Anthropic API, header-based MCP clients)
+DoliMcpCapaOauth=OAuth 2.1 authentication with consent (claude.ai custom connectors)
+DoliMcpResources=Resources
+DoliMcpChangelog=Changelog
+DoliMcpAboutMcp=About the Model Context Protocol
+DoliMcpEditor=Publisher

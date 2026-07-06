@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-06
+
+Première version stable.
+
+### Added
+- **Page « À propos »** (onglet dédié) : version, éditeur, licence,
+  compatibilité, liste des fonctionnalités et liens utiles.
+
+### Changed
+- **Refonte de la page de configuration** : blocs de code lisibles avec
+  **boutons « copier »** natifs (URL de l'endpoint, URL du connecteur,
+  commande Claude Code, `mcp.json`), présentation par cas d'usage
+  (claude.ai / Claude Code / client générique), et l'option connecteur
+  claude.ai mise en avant comme recommandée.
+- **Traductions FR et EN complètes** pour toute l'interface.
+
+### Fixed
+- Affichage du bloc `mcp.json` qui montrait des `\n` littéraux au lieu de
+  retours à la ligne (échappement HTML incorrect).
+
 ## [0.2.1] - 2026-07-06
 
 ### Fixed

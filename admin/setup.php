@@ -58,14 +58,22 @@ print load_fiche_titre($langs->trans('DoliMcpSetup'), $linkback, 'title_setup');
 $head = dolimcpAdminPrepareHead();
 print dol_get_fiche_head($head, 'settings', $langs->trans('DoliMcpName'), -1, 'technic');
 
+// Lightweight styling for the code blocks
+print '<style>
+.dolimcp-code{background:var(--colorbacklinepair2,#f6f6f6);border:1px solid var(--bordercolor,#e0e0e0);border-radius:5px;padding:10px 12px;margin:6px 0 14px;overflow-x:auto;white-space:pre;font-size:0.85em;line-height:1.45;}
+.dolimcp-step{margin:0 0 22px;}
+.dolimcp-step h3{margin:0 0 4px;font-size:1.05em;}
+</style>';
+
 print '<span class="opacitymedium">'.$langs->trans('DoliMcpSetupIntro').'</span><br><br>';
 
 // Status board
+print '<div class="div-table-responsive-no-min">';
 print '<table class="noborder centpercent">';
 print '<tr class="liste_titre"><td>'.$langs->trans('Parameter').'</td><td>'.$langs->trans('Value').'</td></tr>';
 
-print '<tr class="oddeven"><td>'.$langs->trans('DoliMcpEndpoint').'</td>';
-print '<td><strong><a href="'.dol_escape_htmltag($mcpEndpoint).'" target="_blank" rel="noopener">'.dol_escape_htmltag($mcpEndpoint).'</a></strong></td></tr>';
+print '<tr class="oddeven"><td class="titlefield">'.$langs->trans('DoliMcpEndpoint').'</td>';
+print '<td><strong>'.showValueWithClipboardCPButton($mcpEndpoint, 1, $mcpEndpoint).'</strong></td></tr>';
 
 print '<tr class="oddeven"><td>'.$langs->trans('DoliMcpTransport').'</td>';
 print '<td>Streamable HTTP (MCP) — POST JSON-RPC 2.0</td></tr>';
@@ -74,43 +82,51 @@ print '<tr class="oddeven"><td>'.$langs->trans('DoliMcpAuthMethods').'</td>';
 print '<td>'.$langs->trans('DoliMcpAuthMethodsValue').'</td></tr>';
 
 print '<tr class="oddeven"><td>'.$langs->trans('DoliMcpOAuthMetadata').'</td>';
-print '<td><a href="'.dol_escape_htmltag($oauthMetadata).'" target="_blank" rel="noopener">'.dol_escape_htmltag($oauthMetadata).'</a></td></tr>';
+print '<td>'.showValueWithClipboardCPButton($oauthMetadata, 1, $oauthMetadata).'</td></tr>';
 
 print '<tr class="oddeven"><td>'.$langs->trans('DoliMcpServerPackage').'</td>';
-print '<td>'.($autoload ? img_picto('', 'tick').' '.dol_escape_htmltag($autoload) : img_picto('', 'error').' '.$langs->trans('DoliMcpServerPackageMissing')).'</td></tr>';
+print '<td>'.($autoload ? img_picto('', 'tick').' '.$langs->trans('DoliMcpServerPackageOk') : img_picto('', 'error').' '.$langs->trans('DoliMcpServerPackageMissing')).'</td></tr>';
 
 print '<tr class="oddeven"><td>'.$langs->trans('DoliMcpRestApiModule').'</td>';
-print '<td>'.($apiEnabled ? img_picto('', 'tick').' '.$langs->trans('Enabled') : img_picto('', 'error').' '.$langs->trans('Disabled')).'</td></tr>';
+print '<td>'.($apiEnabled ? img_picto('', 'tick').' '.$langs->trans('Enabled') : img_picto('', 'error').' '.$langs->trans('DoliMcpRestApiMissing')).'</td></tr>';
 
 print '</table>';
+print '</div>';
 
 print '<br>';
 
 // Client configuration examples
 print load_fiche_titre($langs->trans('DoliMcpClientExamples'), '', '');
 
-print '<div class="opacitymedium">'.$langs->trans('DoliMcpAuthNote').'</div><br>';
+// --- Option 1: claude.ai custom connector (OAuth, recommended) ---
+print '<div class="dolimcp-step">';
+print '<h3>'.img_picto('', 'fa-plug', 'class="pictofixedwidth"').$langs->trans('DoliMcpClientClaudeAi').' <span class="badge badge-status4 badge-status">'.$langs->trans('DoliMcpRecommended').'</span></h3>';
+print '<div class="opacitymedium">'.$langs->trans('DoliMcpConnectorOAuthHelp').'</div>';
+print dolimcpCodeBlock($mcpEndpoint, $langs->trans('DoliMcpConnectorUrlLabel'));
+print '</div>';
 
-print '<strong>Claude Code :</strong>';
-print '<pre class="dolimcp-code" style="background:#f6f6f6;padding:8px;border-radius:4px;overflow-x:auto;">';
-print dol_escape_htmltag('claude mcp add dolibarr --transport http '.$mcpEndpoint.' --header "Authorization: Bearer VOTRE_CLE_API"');
-print '</pre>';
+// --- Option 2: Claude Code (API key) ---
+$claudeCodeCmd = 'claude mcp add dolibarr --transport http '.$mcpEndpoint.' --header "Authorization: Bearer '.$langs->trans('DoliMcpYourApiKey').'"';
+print '<div class="dolimcp-step">';
+print '<h3>'.img_picto('', 'fa-terminal', 'class="pictofixedwidth"').$langs->trans('DoliMcpClientClaudeCode').'</h3>';
+print '<div class="opacitymedium">'.$langs->trans('DoliMcpAuthNote').'</div>';
+print dolimcpCodeBlock($claudeCodeCmd, $langs->trans('DoliMcpCommandLabel'));
+print '</div>';
 
-print '<strong>'.$langs->trans('DoliMcpGenericClient').' (mcp.json) :</strong>';
-print '<pre class="dolimcp-code" style="background:#f6f6f6;padding:8px;border-radius:4px;overflow-x:auto;">';
-print dol_escape_htmltag(json_encode(array(
+// --- Option 3: generic MCP client (mcp.json) ---
+$mcpJson = json_encode(array(
 	'mcpServers' => array(
 		'dolibarr' => array(
 			'type' => 'http',
 			'url' => $mcpEndpoint,
-			'headers' => array('Authorization' => 'Bearer VOTRE_CLE_API'),
+			'headers' => array('Authorization' => 'Bearer '.$langs->trans('DoliMcpYourApiKey')),
 		),
 	),
-), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-print '</pre>';
-
-print '<strong>Claude.ai ('.$langs->trans('DoliMcpConnectorOAuth').') :</strong>';
-print '<div class="opacitymedium">'.$langs->trans('DoliMcpConnectorOAuthHelp', $mcpEndpoint).'</div><br>';
+), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+print '<div class="dolimcp-step">';
+print '<h3>'.img_picto('', 'fa-file-code', 'class="pictofixedwidth"').$langs->trans('DoliMcpClientGeneric').'</h3>';
+print dolimcpCodeBlock($mcpJson, 'mcp.json');
+print '</div>';
 
 print '<div class="info">'.$langs->trans('DoliMcpApiKeyHelp').'</div>';
 
