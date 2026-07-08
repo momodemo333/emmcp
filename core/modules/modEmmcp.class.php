@@ -50,7 +50,7 @@ class modEmmcp extends DolibarrModules
 		$this->descriptiondetail = 'EmmcpDescriptionDetail';
 		$this->editor_name = 'E-dem';
 		$this->editor_url = 'https://www.e-dem.com';
-		$this->version = '1.0.0';
+		$this->version = '1.0.1';
 		// Native Dolibarr "update available" check (compares this URL's answer to $this->version)
 		$this->url_last_version = 'https://www.e-dem.com/dolibarr/emmcp/last_version.php';
 		$this->const_name = 'MAIN_MODULE_'.strtoupper($this->name);

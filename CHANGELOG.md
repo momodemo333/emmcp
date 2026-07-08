@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-07-08
+
+### Changed
+- Mise à jour du paquet serveur MCP embarqué (`dolibarr-mcp-server`) avec les
+  corrections issues de l'usage réel :
+  - le filtre `fields` renvoie désormais un avertissement `unknown_fields`
+    (avec la liste des champs réellement disponibles) au lieu d'un résultat
+    vide trompeur quand aucun des champs demandés n'existe — utile par ex.
+    sur `/tasks/{id}/timespent` dont les champs sont préfixés
+    `timespent_line_*` ;
+  - documentation des champs requis pour la création de tâches
+    (`ref` + `fk_project`) et de propositions (`socid` + `date`), et des
+    noms de champs corrects pour la lecture du temps passé.
+
 ## [1.0.0] - 2026-07-06
 
 Première version stable.
