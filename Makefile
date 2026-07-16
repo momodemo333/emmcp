@@ -16,6 +16,10 @@ BUILD_DIR := build
 #   make build-release MCP_PACKAGE_SRC=/path/to/dolibarr-mcp-server
 MCP_PACKAGE_SRC ?= ../dalfred/dolibarr-mcp-server
 
+# Source of the embedded dolibarr-mcp-oauth library (single upstream repo).
+# Overridable: make build-release LIB_OAUTH_SRC=/path/to/dolibarr-mcp-oauth
+LIB_OAUTH_SRC ?= ../../../../../dolibarr-mcp-oauth
+
 # Extract version from the module descriptor
 VERSION := $(shell grep -oP "\\\$$this->version\s*=\s*'\K[^']+" $(MODULE_FILE))
 
@@ -26,10 +30,13 @@ RELEASE_FILENAME := module_$(MODULE_NAME)-$(VERSION).zip
 CRITICAL_FILES := mcp.php oauth.php .htaccess \
 	core/modules/modEmmcp.class.php \
 	admin/setup.php lib/emmcp.lib.php \
-	class/emmcpoauthserver.class.php \
 	sql/llx_emmcp_oauth_token.sql \
 	vendor/dolibarr-mcp-server/LLM.md \
-	vendor/dolibarr-mcp-server/vendor/autoload.php
+	vendor/dolibarr-mcp-server/vendor/autoload.php \
+	lib/emmcp_bootstrap.php \
+	vendor/dolibarr-mcp-oauth/src/OAuthServer.php \
+	vendor/dolibarr-mcp-oauth/src/HttpEndpoint.php \
+	vendor/dolibarr-mcp-oauth/src/OAuthRouter.php
 
 # Colors
 GREEN := \033[0;32m
@@ -60,7 +67,7 @@ version:
 	@echo "$(VERSION)"
 
 lint:
-	@find admin class core lib -name '*.php' -print0 | xargs -0 -n1 php -l >/dev/null
+	@find admin core lib -name '*.php' -print0 | xargs -0 -n1 php -l >/dev/null
 	@php -l mcp.php >/dev/null && php -l oauth.php >/dev/null
 	@echo "$(GREEN)PHP syntax OK$(NC)"
 
@@ -71,27 +78,33 @@ build-release:
 	@mkdir -p $(RELEASE_DIR)
 	@mkdir -p $(BUILD_DIR)/$(MODULE_NAME)
 
-	@echo "[1/6] Copying module files..."
-	@cp -r admin class core lib sql langs $(BUILD_DIR)/$(MODULE_NAME)/
+	@echo "[1/7] Copying module files..."
+	@cp -r admin core lib sql langs $(BUILD_DIR)/$(MODULE_NAME)/
 	@cp mcp.php oauth.php README.md CHANGELOG.md .htaccess $(BUILD_DIR)/$(MODULE_NAME)/
 
-	@echo "[2/6] Bundling dolibarr-mcp-server package..."
+	@echo "[2/7] Bundling dolibarr-mcp-server package..."
 	@mkdir -p $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server
 	@cp -r $(MCP_PACKAGE_SRC)/src $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server/
 	@cp $(MCP_PACKAGE_SRC)/LLM.md $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server/
 	@cp $(MCP_PACKAGE_SRC)/composer.json $(MCP_PACKAGE_SRC)/composer.lock $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server/
 
-	@echo "[3/6] Installing production Composer dependencies (--no-dev)..."
+	@echo "[3/7] Bundling dolibarr-mcp-oauth library..."
+	@test -d "$(LIB_OAUTH_SRC)/src" || (echo "$(RED)dolibarr-mcp-oauth source not found: $(LIB_OAUTH_SRC)$(NC)" && exit 1)
+	@mkdir -p $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-oauth
+	@cp -r $(LIB_OAUTH_SRC)/src $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-oauth/
+	@cp $(LIB_OAUTH_SRC)/composer.json $(LIB_OAUTH_SRC)/README.md $(LIB_OAUTH_SRC)/CHANGELOG.md $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-oauth/
+
+	@echo "[4/7] Installing production Composer dependencies (--no-dev)..."
 	@cd $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server && \
 		composer install --no-dev --optimize-autoloader --no-interaction --quiet
 
-	@echo "[4/6] Pruning dev cruft..."
+	@echo "[5/7] Pruning dev cruft..."
 	@find $(BUILD_DIR)/$(MODULE_NAME) -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
 	@find $(BUILD_DIR)/$(MODULE_NAME) -type f \( -name ".gitignore" -o -name ".gitattributes" \) -delete 2>/dev/null || true
 	@find $(BUILD_DIR)/$(MODULE_NAME)/vendor -type d \( -name tests -o -name ".github" -o -name docs -o -name ".phan" \) -exec rm -rf {} + 2>/dev/null || true
 	@find $(BUILD_DIR)/$(MODULE_NAME)/vendor -type f \( -name "phpunit.xml*" -o -name "phpstan.neon" -o -name ".editorconfig" -o -name "*.dist" \) -delete 2>/dev/null || true
 
-	@echo "[5/6] Verifying critical files are present..."
+	@echo "[6/7] Verifying critical files are present..."
 	@for f in $(CRITICAL_FILES); do \
 		if [ ! -e "$(BUILD_DIR)/$(MODULE_NAME)/$$f" ]; then \
 			echo "$(RED)MISSING from build: $$f$(NC)"; exit 1; \
@@ -99,7 +112,7 @@ build-release:
 	done
 	@echo "  all $(words $(CRITICAL_FILES)) critical files present"
 
-	@echo "[6/6] Creating ZIP..."
+	@echo "[7/7] Creating ZIP..."
 	@rm -f $(RELEASE_DIR)/$(RELEASE_FILENAME) $(RELEASE_DIR)/$(RELEASE_FILENAME).sha256
 	@cd $(BUILD_DIR) && zip -rq $(RELEASE_DIR)/$(RELEASE_FILENAME) $(MODULE_NAME)/
 	@cd $(RELEASE_DIR) && sha256sum $(RELEASE_FILENAME) > $(RELEASE_FILENAME).sha256
