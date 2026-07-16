@@ -84,8 +84,12 @@ if (!$res) {
 	die('{"error":"server_error","error_description":"Main include failed"}');
 }
 
-dol_include_once('/emmcp/class/emmcpoauthserver.class.php');
 dol_include_once('/emmcp/lib/emmcp.lib.php');
+dol_include_once('/emmcp/lib/emmcp_bootstrap.php');
+if (emmcp_mcp_oauth_autoload() === null) {
+	http_response_code(500);
+	die('{"error":"server_error","error_description":"dolibarr-mcp-oauth library not found"}');
+}
 
 if (!isModEnabled('emmcp')) {
 	emmcp_oauth_json(array('error' => 'server_error', 'error_description' => 'Module emMCP not enabled'), 503);
@@ -93,7 +97,9 @@ if (!isModEnabled('emmcp')) {
 
 $issuer = emmcpPublicUrl('/emmcp/oauth.php');
 $mcpUrl = emmcpPublicUrl('/emmcp/mcp.php');
-$oauthServer = new EmmcpOAuthServer($db);
+$config = new \DolibarrMcpOAuth\ExposureConfig('emmcp', 'emcp_', 'EMMCP');
+$oauthServer = new \DolibarrMcpOAuth\OAuthServer($db, $config);
+$oauthRouter = new \DolibarrMcpOAuth\OAuthRouter($oauthServer, $config, $issuer, $mcpUrl);
 
 /**
  * Send a JSON response and exit.
@@ -127,28 +133,11 @@ switch ($emmcp_route) {
 
 	case '/.well-known/openid-configuration':
 	case '/.well-known/oauth-authorization-server':
-		emmcp_oauth_json(array(
-			'issuer' => $issuer,
-			'authorization_endpoint' => $issuer.'/authorize',
-			'token_endpoint' => $issuer.'/token',
-			'registration_endpoint' => $issuer.'/register',
-			'response_types_supported' => array('code'),
-			'grant_types_supported' => array('authorization_code', 'refresh_token'),
-			'code_challenge_methods_supported' => array('S256'),
-			'token_endpoint_auth_methods_supported' => array('none', 'client_secret_basic', 'client_secret_post'),
-			'scopes_supported' => array('dolibarr'),
-			'service_documentation' => 'https://github.com/momodemo333/dolibarr-mcp-server',
-		));
+		emmcp_oauth_json($oauthRouter->metadataAuthorizationServer());
 		// no break (emmcp_oauth_json exits)
 
 	case '/.well-known/oauth-protected-resource':
-		emmcp_oauth_json(array(
-			'resource' => $mcpUrl,
-			'authorization_servers' => array($issuer),
-			'scopes_supported' => array('dolibarr'),
-			'bearer_methods_supported' => array('header'),
-			'resource_name' => 'Dolibarr MCP Server',
-		));
+		emmcp_oauth_json($oauthRouter->metadataProtectedResource());
 		// no break
 
 	// --- Dynamic Client Registration (RFC 7591) -----------------------------
@@ -161,11 +150,8 @@ switch ($emmcp_route) {
 		if (!is_array($body)) {
 			emmcp_oauth_json(array('error' => 'invalid_client_metadata', 'error_description' => 'Invalid JSON body'), 400);
 		}
-		$response = $oauthServer->registerClient($body);
-		if ($response === null) {
-			emmcp_oauth_json(array('error' => 'invalid_client_metadata', 'error_description' => $oauthServer->error), 400);
-		}
-		emmcp_oauth_json($response, 201);
+		$r = $oauthRouter->handleRegister($body);
+		emmcp_oauth_json($r['payload'], $r['httpCode']);
 		// no break
 
 	// --- Token endpoint ------------------------------------------------------
@@ -174,45 +160,9 @@ switch ($emmcp_route) {
 		if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 			emmcp_oauth_json(array('error' => 'invalid_request', 'error_description' => 'POST required'), 405);
 		}
-
-		$grantType = (string) GETPOST('grant_type', 'alphanohtml');
-		$clientId = (string) GETPOST('client_id', 'alphanohtml');
-		$clientSecret = (string) GETPOST('client_secret', 'alphanohtml');
-
-		// client_secret_basic support
-		if (empty($clientId) && !empty($_SERVER['PHP_AUTH_USER'])) {
-			$clientId = urldecode($_SERVER['PHP_AUTH_USER']);
-			$clientSecret = urldecode((string) ($_SERVER['PHP_AUTH_PW'] ?? ''));
-		}
-
-		$client = $oauthServer->getClient($clientId);
-		if (!$client) {
-			emmcp_oauth_json(array('error' => 'invalid_client'), 401);
-		}
-		if (!$oauthServer->authenticateClient($client, $clientSecret)) {
-			emmcp_oauth_json(array('error' => 'invalid_client'), 401);
-		}
-
-		$oauthServer->purgeExpired();
-
-		if ($grantType === 'authorization_code') {
-			$tokens = $oauthServer->exchangeAuthorizationCode(
-				$client,
-				(string) GETPOST('code', 'alphanohtml'),
-				(string) GETPOST('redirect_uri', 'alphanohtml'),
-				(string) GETPOST('code_verifier', 'alphanohtml')
-			);
-		} elseif ($grantType === 'refresh_token') {
-			$tokens = $oauthServer->refreshTokens($client, (string) GETPOST('refresh_token', 'alphanohtml'));
-		} else {
-			emmcp_oauth_json(array('error' => 'unsupported_grant_type'), 400);
-		}
-
-		if ($tokens === null) {
-			emmcp_oauth_json(array('error' => $oauthServer->error ?: 'invalid_grant'), 400);
-		}
-		dol_syslog('[EMMCP] OAuth tokens issued to client '.$client->client_id.' (grant: '.$grantType.')', LOG_INFO);
-		emmcp_oauth_json($tokens);
+		$getPost = fn(string $name, $default) => GETPOST($name, 'alphanohtml') ?: $default;
+		$r = $oauthRouter->handleToken($getPost, $_SERVER);
+		emmcp_oauth_json($r['payload'], $r['httpCode']);
 		// no break
 
 	// --- Authorization endpoint (login + consent) ----------------------------
@@ -221,45 +171,43 @@ switch ($emmcp_route) {
 		// From here on, $user is a logged-in Dolibarr user (main.inc.php
 		// displayed the login form first if needed).
 
-		$clientId = (string) GETPOST('client_id', 'alphanohtml');
-		$redirectUri = (string) GETPOST('redirect_uri', 'alphanohtml');
-		$state = (string) GETPOST('state', 'alphanohtml');
-		$scope = (string) GETPOST('scope', 'alphanohtml');
-		$resource = (string) GETPOST('resource', 'alphanohtml');
-		$responseType = (string) GETPOST('response_type', 'alphanohtml');
-		$codeChallenge = (string) GETPOST('code_challenge', 'alphanohtml');
-		$codeChallengeMethod = (string) GETPOST('code_challenge_method', 'alphanohtml');
+		$params = array(
+			'client_id' => (string) GETPOST('client_id', 'alphanohtml'),
+			'redirect_uri' => (string) GETPOST('redirect_uri', 'alphanohtml'),
+			'state' => (string) GETPOST('state', 'alphanohtml'),
+			'scope' => (string) GETPOST('scope', 'alphanohtml'),
+			'resource' => (string) GETPOST('resource', 'alphanohtml'),
+			'response_type' => (string) GETPOST('response_type', 'alphanohtml'),
+			'code_challenge' => (string) GETPOST('code_challenge', 'alphanohtml'),
+			'code_challenge_method' => (string) GETPOST('code_challenge_method', 'alphanohtml'),
+		);
 
-		$client = $oauthServer->getClient($clientId);
+		$decision = $oauthRouter->validateAuthorizeRequest($params);
 
 		// Never redirect to an unvalidated URI (open redirect protection)
-		if (!$client || !$oauthServer->isRegisteredRedirectUri($client, $redirectUri)) {
+		if (!$decision->valid && $decision->redirectUri === null) {
 			llxHeader('', 'emMCP OAuth');
 			print '<div class="error">Invalid OAuth request: unknown client_id or unregistered redirect_uri.</div>';
 			llxFooter();
 			exit;
 		}
 
-		/**
-		 * Redirect back to the client with query parameters.
-		 *
-		 * @param string $uri    Validated redirect URI
-		 * @param array  $params Query parameters to append
-		 * @return never
-		 */
-		function emmcp_oauth_redirect($uri, $params)
-		{
-			$uri .= (strpos($uri, '?') === false ? '?' : '&').http_build_query($params);
-			header('Location: '.$uri, true, 302);
+		if (!$decision->valid) {
+			$redirectParams = array('error' => $decision->error);
+			if ($decision->errorDescription !== null) {
+				$redirectParams['error_description'] = $decision->errorDescription;
+			}
+			$redirectParams['state'] = $decision->state;
+			header('Location: '.\DolibarrMcpOAuth\Support\UrlHelper::buildRedirect($decision->redirectUri, $redirectParams), true, 302);
 			exit;
 		}
 
-		if ($responseType !== 'code') {
-			emmcp_oauth_redirect($redirectUri, array('error' => 'unsupported_response_type', 'state' => $state));
-		}
-		if (empty($codeChallenge) || strtoupper($codeChallengeMethod) !== 'S256') {
-			emmcp_oauth_redirect($redirectUri, array('error' => 'invalid_request', 'error_description' => 'PKCE S256 required', 'state' => $state));
-		}
+		$client = $decision->client;
+		$redirectUri = $decision->redirectUri;
+		$state = $decision->state;
+		$scope = $decision->scope;
+		$resource = $decision->resource;
+		$codeChallenge = $decision->codeChallenge;
 
 		$action = GETPOST('action', 'aZ09');
 
@@ -268,13 +216,16 @@ switch ($emmcp_route) {
 			if (GETPOST('decision', 'aZ09') === 'accept') {
 				$code = $oauthServer->createAuthorizationCode($client, (int) $user->id, $redirectUri, $codeChallenge, $scope, $resource);
 				if ($code === null) {
-					emmcp_oauth_redirect($redirectUri, array('error' => 'server_error', 'state' => $state));
+					header('Location: '.\DolibarrMcpOAuth\Support\UrlHelper::buildRedirect($redirectUri, array('error' => 'server_error', 'state' => $state)), true, 302);
+					exit;
 				}
 				dol_syslog('[EMMCP] OAuth consent granted by user '.$user->login.' to client '.$client->client_id, LOG_INFO);
-				emmcp_oauth_redirect($redirectUri, array('code' => $code, 'state' => $state));
+				header('Location: '.\DolibarrMcpOAuth\Support\UrlHelper::buildRedirect($redirectUri, array('code' => $code, 'state' => $state)), true, 302);
+				exit;
 			}
 			dol_syslog('[EMMCP] OAuth consent denied by user '.$user->login.' to client '.$client->client_id, LOG_INFO);
-			emmcp_oauth_redirect($redirectUri, array('error' => 'access_denied', 'state' => $state));
+			header('Location: '.\DolibarrMcpOAuth\Support\UrlHelper::buildRedirect($redirectUri, array('error' => 'access_denied', 'state' => $state)), true, 302);
+			exit;
 		}
 
 		// Consent screen
@@ -298,7 +249,7 @@ switch ($emmcp_route) {
 		print '<form method="POST" action="'.dol_escape_htmltag($issuer.'/authorize').'">';
 		print '<input type="hidden" name="token" value="'.newToken().'">';
 		print '<input type="hidden" name="action" value="consent">';
-		foreach (array('client_id' => $clientId, 'redirect_uri' => $redirectUri, 'state' => $state, 'scope' => $scope, 'resource' => $resource, 'response_type' => $responseType, 'code_challenge' => $codeChallenge, 'code_challenge_method' => $codeChallengeMethod) as $k => $v) {
+		foreach ($params as $k => $v) {
 			print '<input type="hidden" name="'.$k.'" value="'.dol_escape_htmltag($v).'">';
 		}
 		print '<button type="submit" name="decision" value="accept" class="button buttongen marginrightonly">'.$langs->trans('EmmcpOAuthAccept').'</button>';
