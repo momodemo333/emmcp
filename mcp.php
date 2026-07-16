@@ -92,8 +92,11 @@ function emmcp_error($httpCode, $rpcCode, $message)
 {
 	if ($httpCode == 401) {
 		dol_include_once('/emmcp/lib/emmcp.lib.php');
+		dol_include_once('/emmcp/lib/emmcp_bootstrap.php');
+		emmcp_mcp_oauth_autoload();
 		$prm = emmcpPublicUrl('/emmcp/oauth.php').'/.well-known/oauth-protected-resource';
-		header('WWW-Authenticate: Bearer resource_metadata="'.$prm.'", scope="dolibarr"');
+		$endpoint = new \DolibarrMcpOAuth\HttpEndpoint($GLOBALS['db'], new \DolibarrMcpOAuth\ExposureConfig('emmcp', 'emcp_', 'EMMCP'));
+		header('WWW-Authenticate: '.$endpoint->wwwAuthenticateHeader($prm));
 	}
 	http_response_code($httpCode);
 	header('Content-Type: application/json');
@@ -110,99 +113,28 @@ if (!isModEnabled('emmcp')) {
 }
 
 // --- Authentication -------------------------------------------------------
-
-// The Authorization header may be stripped by Apache/FPM: check the usual
-// fallbacks (REDIRECT_ prefix, getallheaders) before giving up.
-$authHeader = '';
-if (!empty($_SERVER['HTTP_AUTHORIZATION'])) {
-	$authHeader = $_SERVER['HTTP_AUTHORIZATION'];
-} elseif (!empty($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
-	$authHeader = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
-} elseif (function_exists('getallheaders')) {
-	foreach (getallheaders() as $name => $value) {
-		if (strcasecmp($name, 'Authorization') === 0) {
-			$authHeader = $value;
-			break;
-		}
-	}
+dol_include_once('/emmcp/lib/emmcp.lib.php');
+dol_include_once('/emmcp/lib/emmcp_bootstrap.php');
+if (emmcp_mcp_oauth_autoload() === null) {
+	emmcp_error(500, -32002, 'dolibarr-mcp-oauth library not found');
 }
 
-$apiKey = '';
-if ($authHeader && preg_match('/^Bearer\s+(\S+)$/i', $authHeader, $m)) {
-	$apiKey = $m[1];
+$mcpEndpoint = new \DolibarrMcpOAuth\HttpEndpoint($db, new \DolibarrMcpOAuth\ExposureConfig('emmcp', 'emcp_', 'EMMCP'));
+$getPost = fn(string $name, $default) => GETPOST($name, 'alphanohtml') ?: $default;
+$auth = $mcpEndpoint->resolveApiKey($_SERVER, $getPost);
+if ($auth->apiKey === null) {
+	emmcp_error($auth->httpCode, -32001, $auth->error);
 }
-if (empty($apiKey) && !empty($_SERVER['HTTP_DOLAPIKEY'])) {
-	$apiKey = $_SERVER['HTTP_DOLAPIKEY'];
-}
-if (empty($apiKey)) {
-	$apiKey = GETPOST('DOLAPIKEY', 'alphanohtml');
-}
-$apiKey = dol_string_nounprintableascii($apiKey);
-
-if (empty($apiKey) || preg_match('/^dolcrypt:/i', $apiKey)) {
-	emmcp_error(401, -32001, 'Missing or invalid credentials. Provide a Dolibarr API key ("Authorization: Bearer <key>" or "DOLAPIKEY" header), or authenticate through OAuth.');
-}
-
-// --- OAuth access token path -----------------------------------------------
-// Tokens issued by oauth.php are opaque values prefixed "emcp_a". They map
-// to the Dolibarr user who granted consent; the request then proceeds with
-// that user's REST API key.
-if (str_starts_with($apiKey, 'emcp_a')) {
-	dol_include_once('/emmcp/class/emmcpoauthserver.class.php');
-	$oauthServer = new EmmcpOAuthServer($db);
-
-	$tokenRow = $oauthServer->validateAccessToken($apiKey);
-	if (!$tokenRow) {
-		dol_syslog('[EMMCP] OAuth access token rejected (unknown, expired or revoked)', LOG_NOTICE);
-		emmcp_error(401, -32001, 'Invalid or expired access token');
-	}
-
-	$userApiKey = $oauthServer->getUserApiKey((int) $tokenRow->fk_user);
-	if ($userApiKey === null) {
-		dol_syslog('[EMMCP] OAuth token valid but user API key unavailable: '.$oauthServer->error, LOG_ERR);
-		emmcp_error(403, -32001, 'Access token valid but the linked Dolibarr user is unavailable');
-	}
-
-	$apiKey = $userApiKey; // downstream flow is identical to direct API key auth
-}
-
-// Validate against llx_user, same lookup as the native REST API
-// (api_key may be stored plain or encrypted with dolEncrypt)
-$sql = "SELECT u.rowid, u.login, u.statut as status";
-$sql .= " FROM ".MAIN_DB_PREFIX."user as u";
-$sql .= " WHERE u.api_key = '".$db->escape($apiKey)."'";
-$sql .= " OR u.api_key = '".$db->escape(dolEncrypt($apiKey, '', '', 'dolibarr'))."'";
-
-$resql = $db->query($sql);
-if (!$resql || $db->num_rows($resql) != 1) {
-	dol_syslog('[EMMCP] Authentication KO: no unique user for provided api key', LOG_NOTICE);
-	sleep(1); // Anti brute force, same delay as the native REST API
-	emmcp_error(401, -32001, 'Error user not valid (not found with api key or bad status)');
-}
-$obj = $db->fetch_object($resql);
-if (empty($obj->status)) {
-	dol_syslog('[EMMCP] Authentication KO: user '.$obj->login.' is disabled', LOG_NOTICE);
-	sleep(1);
-	emmcp_error(401, -32001, 'Error user not valid (not found with api key or bad status)');
-}
-
-dol_syslog('[EMMCP] MCP request authenticated for user '.$obj->login, LOG_DEBUG);
+$apiKey = $auth->apiKey;
 
 // --- Load the Dolibarr MCP server package ----------------------------------
 
 // POC: reuse the MCP server embedded in the Dalfred module. A standalone
 // release of emMCP will bundle its own copy under /emmcp/vendor/.
-$autoloadCandidates = array(
+$autoload = \DolibarrMcpOAuth\Support\PackageLocator::findAutoloader(array(
 	dol_buildpath('/emmcp/vendor/dolibarr-mcp-server/vendor/autoload.php', 0),
 	dol_buildpath('/dalfred/dolibarr-mcp-server/vendor/autoload.php', 0),
-);
-$autoload = null;
-foreach ($autoloadCandidates as $candidate) {
-	if ($candidate && file_exists($candidate)) {
-		$autoload = $candidate;
-		break;
-	}
-}
+));
 if (!$autoload) {
 	emmcp_error(500, -32002, 'Dolibarr MCP server package not found (install the Dalfred module or bundle the package)');
 }
