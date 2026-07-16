@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-16
+
+### Changed
+- **Internal refactor onto the shared `dolibarr-mcp-oauth` library.** The OAuth
+  2.1 authorization server, the HTTP authentication resolution, and the URL/
+  code-block helpers now come from the shared library (embedded in the ZIP),
+  instead of a copy local to this module. **No functional change:** identical
+  endpoints, routes, tables (`llx_emmcp_oauth_*`), status codes, OAuth error
+  identifiers and discovery metadata — existing connectors keep working with no
+  re-consent or re-registration.
+
 ## [1.0.1] - 2026-07-08
 
 ### Changed
