@@ -60,7 +60,7 @@ print dol_get_fiche_head($head, 'settings', $langs->trans('EmmcpName'), -1, 'tec
 
 // Lightweight styling for the code blocks
 print '<style>
-.emmcp-code{background:var(--colorbacklinepair2,#f6f6f6);border:1px solid var(--bordercolor,#e0e0e0);border-radius:5px;padding:10px 12px;margin:6px 0 14px;overflow-x:auto;white-space:pre;font-size:0.85em;line-height:1.45;}
+.emmcp-code,.mcp-code{background:var(--colorbacklinepair2,#f6f6f6);border:1px solid var(--bordercolor,#e0e0e0);border-radius:5px;padding:10px 12px;margin:6px 0 14px;overflow-x:auto;white-space:pre;font-size:0.85em;line-height:1.45;}
 .emmcp-step{margin:0 0 22px;}
 .emmcp-step h3{margin:0 0 4px;font-size:1.05em;}
 </style>';

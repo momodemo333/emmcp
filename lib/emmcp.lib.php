@@ -64,16 +64,10 @@ function emmcpAdminPrepareHead()
  */
 function emmcpCodeBlock($code, $label = '')
 {
-	$html = '';
-	if ($label !== '') {
-		$html .= '<div class="paddingtop"><strong>'.dol_escape_htmltag($label).'</strong> ';
-		// texttoshow='none' → render only the copy button (value hidden)
-		$html .= showValueWithClipboardCPButton($code, 0, 'none');
-		$html .= '</div>';
-	}
-	$html .= '<pre class="emmcp-code">'.htmlspecialchars($code, ENT_QUOTES, 'UTF-8').'</pre>';
+	dol_include_once('/emmcp/lib/emmcp_bootstrap.php');
+	emmcp_mcp_oauth_autoload();
 
-	return $html;
+	return \DolibarrMcpOAuth\Support\UrlHelper::codeBlock($code, $label);
 }
 
 /**
@@ -91,17 +85,10 @@ function emmcpCodeBlock($code, $label = '')
  */
 function emmcpPublicUrl($relpath)
 {
-	$url = dol_buildpath($relpath, 2);
+	dol_include_once('/emmcp/lib/emmcp_bootstrap.php');
+	emmcp_mcp_oauth_autoload();
 
-	$isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-		|| (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https')
-		|| ((int) ($_SERVER['SERVER_PORT'] ?? 0) === 443);
-
-	if ($isHttps && str_starts_with($url, 'http://')) {
-		$url = 'https://'.substr($url, 7);
-	}
-
-	return $url;
+	return \DolibarrMcpOAuth\Support\UrlHelper::publicUrl($relpath);
 }
 
 /**
@@ -111,14 +98,11 @@ function emmcpPublicUrl($relpath)
  */
 function emmcpFindMcpAutoloader()
 {
-	$candidates = array(
+	dol_include_once('/emmcp/lib/emmcp_bootstrap.php');
+	emmcp_mcp_oauth_autoload();
+
+	return \DolibarrMcpOAuth\Support\PackageLocator::findAutoloader(array(
 		dol_buildpath('/emmcp/vendor/dolibarr-mcp-server/vendor/autoload.php', 0),
 		dol_buildpath('/dalfred/dolibarr-mcp-server/vendor/autoload.php', 0),
-	);
-	foreach ($candidates as $candidate) {
-		if ($candidate && file_exists($candidate)) {
-			return $candidate;
-		}
-	}
-	return null;
+	));
 }
