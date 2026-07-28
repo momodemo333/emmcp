@@ -192,6 +192,13 @@ build-release: check-runtime check-oauth
 	@echo "[4/7] Installing production Composer dependencies (--no-dev)..."
 	@cd $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server && \
 		composer install --no-dev --optimize-autoloader --no-interaction --quiet
+# Composer installs in parallel, so installed.json ends up ordered by whichever
+# download finished first, and the generated autoloaders inherit that order.
+# Two clean clones therefore produced different ZIPs. Sort the source, then let
+# Composer regenerate from it.
+	@php tools/normalize-vendor.php $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server
+	@cd $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server && \
+		composer dump-autoload --no-dev --optimize --no-interaction --quiet
 
 	@echo "[5/7] Pruning dev cruft..."
 	@find $(BUILD_DIR)/$(MODULE_NAME) -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
