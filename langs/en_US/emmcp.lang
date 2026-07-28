@@ -111,3 +111,4 @@ EmmcpResources=Resources
 EmmcpChangelog=Changelog
 EmmcpAboutMcp=About the Model Context Protocol
 EmmcpEditor=Publisher
+EmmcpSqlSchemaOutOfDate=The module database update failed: the schema is not current. The settings below are disabled and the MCP endpoint refuses requests. See the Dolibarr log (prefix [EMMCP]) for details.

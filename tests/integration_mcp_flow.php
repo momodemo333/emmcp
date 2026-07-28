@@ -102,11 +102,18 @@ $initialFlag = getDolGlobalInt('EMMCP_SQL_ENABLED');
 $initialOptIn = $permissions->hasUserOptIn(1);
 $initialDbUser = getDolGlobalString('EMMCP_SQL_DB_USER');
 $initialDbPass = getDolGlobalString('EMMCP_SQL_DB_PASSWORD');
+// Presence, not just value: restoring a missing constant as an empty string
+// would leave a row the instance did not have.
+$initialDbUserSet = ($initialDbUser !== '');
+$initialDbPassSet = ($initialDbPass !== '');
+$initialOptInRowExisted = false;
+$resql = $db->query("SELECT rowid FROM ".MAIN_DB_PREFIX."emmcp_sql_permissions WHERE fk_user = 1 AND entity = ".((int) $conf->entity));
+$initialOptInRowExisted = ($resql && $db->num_rows($resql) > 0);
 
-// Marker for the audit rows this run creates, so they can be removed again.
-$resql = $db->query("SELECT COALESCE(MAX(rowid), 0) AS m FROM ".MAIN_DB_PREFIX."emmcp_sql_audit");
-$obj = $resql ? $db->fetch_object($resql) : null;
-$auditMarker = $obj ? (int) $obj->m : 0;
+// Every audit row this run writes carries a source unique to the run, so the
+// cleanup deletes exactly its own records. Deleting by "rowid greater than a
+// marker" would take a concurrent session's rows with it.
+$auditSource = substr('t_'.bin2hex(random_bytes(5)), 0, 16);
 
 $grantedForTest = false;
 $rightId = 0;
@@ -124,7 +131,8 @@ $rightId = 0;
 function emmcpFlowCleanup()
 {
 	global $db, $conf, $roUser, $initialFlag, $initialOptIn, $initialDbUser, $initialDbPass;
-	global $auditMarker, $grantedForTest, $rightId;
+	global $auditSource, $grantedForTest, $rightId, $createdDbUser;
+	global $initialDbUserSet, $initialDbPassSet, $initialOptInRowExisted;
 
 	static $done = false;
 	if ($done) {
@@ -132,31 +140,47 @@ function emmcpFlowCleanup()
 	}
 	$done = true;
 
-	if (!empty($roUser)) {
-		$db->query("DROP USER IF EXISTS '".$db->escape($roUser)."'@'%'");
+	// Only an account this run actually created.
+	if ($createdDbUser !== '') {
+		$db->query("DROP USER IF EXISTS '".$db->escape($createdDbUser)."'@'%'");
 		$db->query("FLUSH PRIVILEGES");
 	}
 
-	if ($initialDbUser !== '') {
+	if ($initialDbUserSet) {
 		dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $initialDbUser, 'chaine', 0, '', $conf->entity);
-		dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', $initialDbPass, 'chaine', 0, '', $conf->entity);
 	} else {
 		dolibarr_del_const($db, 'EMMCP_SQL_DB_USER', $conf->entity);
+	}
+	if ($initialDbPassSet) {
+		dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', $initialDbPass, 'chaine', 0, '', $conf->entity);
+	} else {
 		dolibarr_del_const($db, 'EMMCP_SQL_DB_PASSWORD', $conf->entity);
 	}
 
 	dolibarr_set_const($db, 'EMMCP_SQL_ENABLED', (string) $initialFlag, 'chaine', 0, '', $conf->entity);
 
 	dol_include_once('/emmcp/class/emmcpsqlpermissions.class.php');
-	(new EmmcpSqlPermissions($db, $conf))->setUserOptIn(1, $initialOptIn, 1);
+	if ($initialOptInRowExisted) {
+		(new EmmcpSqlPermissions($db, $conf))->setUserOptIn(1, $initialOptIn, 1);
+	} else {
+		// There was no row before; leave none behind.
+		$db->query(
+			"DELETE FROM ".MAIN_DB_PREFIX."emmcp_sql_permissions"
+			." WHERE fk_user = 1 AND entity = ".((int) $conf->entity)
+		);
+	}
 
 	if ($grantedForTest && !empty($rightId)) {
 		$db->query("DELETE FROM ".MAIN_DB_PREFIX."user_rights WHERE fk_user = 1 AND fk_id = ".((int) $rightId));
 	}
 
-	// The run writes audit rows on purpose; leaving them would make the trail
-	// grow on every replay and break later "the trail is empty" assertions.
-	$db->query("DELETE FROM ".MAIN_DB_PREFIX."emmcp_sql_audit WHERE rowid > ".((int) $auditMarker));
+	// Exactly this run's rows, identified by its unique source marker: a
+	// "rowid greater than N" delete would also remove a concurrent session's
+	// records.
+	$db->query(
+		"DELETE FROM ".MAIN_DB_PREFIX."emmcp_sql_audit"
+		." WHERE source = '".$db->escape($auditSource)."'"
+	);
 }
 
 /**
@@ -184,7 +208,8 @@ function emmcpFlowInspectState()
 		),
 		'dbusers' => $one("SELECT COUNT(*) AS n FROM mysql.user WHERE user = '".$db->escape($roUser)."'"),
 		'audit_after_marker' => $one(
-			"SELECT COUNT(*) AS n FROM ".MAIN_DB_PREFIX."emmcp_sql_audit WHERE rowid > ".((int) $GLOBALS['auditMarker'])
+			"SELECT COUNT(*) AS n FROM ".MAIN_DB_PREFIX."emmcp_sql_audit"
+			." WHERE source = '".$db->escape($GLOBALS['auditSource'])."'"
 		),
 		'dbuser_const' => getDolGlobalString('EMMCP_SQL_DB_USER'),
 	);
@@ -193,11 +218,15 @@ function emmcpFlowInspectState()
 // Execution now requires a dedicated SELECT-only account, so the flow test
 // provisions one and removes it at the end.
 global $dolibarr_main_db_name, $dolibarr_main_db_user, $dolibarr_main_db_pass;
-$roUser = 'emmcp_flow_test';
+$roUser = substr('emmcp_flow_'.bin2hex(random_bytes(4)), 0, 32);
 $roPass = 'ro_'.bin2hex(random_bytes(8));
+$createdDbUser = '';
 
 register_shutdown_function('emmcpFlowCleanup');
-$db->query("CREATE USER IF NOT EXISTS '".$db->escape($roUser)."'@'%' IDENTIFIED BY '".$db->escape($roPass)."'");
+// No IF NOT EXISTS: a name collision must fail the run rather than take over
+// an account this test did not create.
+$db->query("CREATE USER '".$db->escape($roUser)."'@'%' IDENTIFIED BY '".$db->escape($roPass)."'");
+$createdDbUser = $roUser;
 $db->query("GRANT SELECT ON `".$dolibarr_main_db_name."`.* TO '".$db->escape($roUser)."'@'%'");
 $db->query("FLUSH PRIVILEGES");
 dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $roUser, 'chaine', 0, '', $conf->entity);
@@ -306,7 +335,7 @@ print "  info user is admin=".((int) $testUser->admin).", hasRight(emmcp/sqlquer
 if ($code === null) {
 	check('access granted', true);
 
-	$capability = new EmmcpSqlCapability($db, $conf, $testUser, 'mcp');
+	$capability = new EmmcpSqlCapability($db, $conf, $testUser, $auditSource);
 	$names = listToolNames($capability);
 	check('dolibarr_sql_query is PRESENT', in_array('dolibarr_sql_query', $names, true));
 	check('dolibarr_sql_schema is PRESENT', in_array('dolibarr_sql_schema', $names, true));
@@ -355,7 +384,7 @@ if ($code === null) {
 	check('schema tool returns tables', !empty($out['success']) && !empty($out['tables']));
 
 	print "\n== Audit trail ==\n";
-	$resql = $db->query("SELECT COUNT(*) as n FROM ".MAIN_DB_PREFIX."emmcp_sql_audit WHERE fk_user = 1");
+	$resql = $db->query("SELECT COUNT(*) as n FROM ".MAIN_DB_PREFIX."emmcp_sql_audit WHERE source = '".$db->escape($auditSource)."'");
 	$obj = $resql ? $db->fetch_object($resql) : null;
 	check('successful queries were recorded', $obj && (int) $obj->n > 0, $obj ? $obj->n.' rows' : 'none');
 
@@ -368,11 +397,11 @@ if ($code === null) {
 	$obj = $resql ? $db->fetch_object($resql) : null;
 	check('refused queries were recorded', $obj && (int) $obj->n > 0, $obj ? $obj->n.' rows' : 'none');
 
-	$resql = $db->query("SELECT COUNT(*) as n FROM ".MAIN_DB_PREFIX."emmcp_sql_audit WHERE operation = 'schema'");
+	$resql = $db->query("SELECT COUNT(*) as n FROM ".MAIN_DB_PREFIX."emmcp_sql_audit WHERE source = '".$db->escape($auditSource)."' AND operation = 'schema'");
 	$obj = $resql ? $db->fetch_object($resql) : null;
 	check('schema introspections were recorded', $obj && (int) $obj->n > 0, $obj ? $obj->n.' rows' : 'none');
 
-	$resql = $db->query("SELECT sql_text, sql_hash FROM ".MAIN_DB_PREFIX."emmcp_sql_audit ORDER BY rowid DESC LIMIT 1");
+	$resql = $db->query("SELECT sql_text, sql_hash FROM ".MAIN_DB_PREFIX."emmcp_sql_audit WHERE source = '".$db->escape($auditSource)."' ORDER BY rowid DESC LIMIT 1");
 	$obj = $resql ? $db->fetch_object($resql) : null;
 	check('audit stores a hash', $obj && strlen((string) $obj->sql_hash) === 64);
 	check('audit stores no result data', $obj && stripos((string) $obj->sql_text, 'ACME') === false);

@@ -120,8 +120,89 @@ print "\n== Gateway: dedicated account is mandatory ==\n";
 dol_include_once('/emmcp/class/emmcpsqlgateway.class.php');
 require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';
 
+// Whether the constants existed at all, not just their value: restoring a
+// missing constant as an empty string leaves a row that was not there before.
+$initialDbUserSet = (getDolGlobalString('EMMCP_SQL_DB_USER') !== '');
+$initialDbPassSet = (getDolGlobalString('EMMCP_SQL_DB_PASSWORD') !== '');
 $initialDbUser = getDolGlobalString('EMMCP_SQL_DB_USER');
 $initialDbPass = getDolGlobalString('EMMCP_SQL_DB_PASSWORD');
+
+// Accounts this run actually created. Only these are dropped: a fixed name
+// plus CREATE IF NOT EXISTS would silently adopt — and then delete — a
+// pre-existing account belonging to someone else.
+$createdDbUsers = array();
+$createdProbeTables = array();
+
+/**
+ * Create a database account with a name unique to this run.
+ *
+ * CREATE without IF NOT EXISTS on purpose: if the name somehow already exists,
+ * the run must fail rather than take over an account it did not make.
+ *
+ * @param  string $prefix Readable prefix
+ * @param  string $grant  Privileges to grant on the current database
+ * @return array{0: string, 1: string} user and password
+ */
+function makeTestAccount($prefix, $grant)
+{
+    global $db, $dolibarr_main_db_name, $createdDbUsers;
+
+    $user = substr($prefix.'_'.bin2hex(random_bytes(4)), 0, 32);
+    $pass = 'p_'.bin2hex(random_bytes(8));
+
+    $db->query("CREATE USER '".$db->escape($user)."'@'%' IDENTIFIED BY '".$db->escape($pass)."'");
+    $createdDbUsers[] = $user;
+    $db->query("GRANT ".$grant." ON `".$dolibarr_main_db_name."`.* TO '".$db->escape($user)."'@'%'");
+    $db->query("FLUSH PRIVILEGES");
+
+    return array($user, $pass);
+}
+
+/**
+ * Undo everything this run created, whatever happens.
+ *
+ * Registered as a shutdown function so an exception, a fatal or an early exit
+ * cannot leave database accounts, probe tables or altered constants behind.
+ *
+ * @return void
+ */
+function emmcpReadonlyCleanup()
+{
+    global $db, $conf, $createdDbUsers, $createdProbeTables;
+    global $initialDbUser, $initialDbPass, $initialDbUserSet, $initialDbPassSet;
+
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
+    foreach ($createdDbUsers as $user) {
+        $db->query("DROP USER IF EXISTS '".$db->escape($user)."'@'%'");
+    }
+    if ($createdDbUsers !== array()) {
+        $db->query("FLUSH PRIVILEGES");
+    }
+
+    foreach ($createdProbeTables as $table) {
+        $db->query("DROP TABLE IF EXISTS ".$table);
+    }
+
+    // Restore absence as absence: writing an empty value would leave a
+    // constant row the instance did not have before this run.
+    if ($initialDbUserSet) {
+        dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $initialDbUser, 'chaine', 0, '', $conf->entity);
+    } else {
+        dolibarr_del_const($db, 'EMMCP_SQL_DB_USER', $conf->entity);
+    }
+    if ($initialDbPassSet) {
+        dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', $initialDbPass, 'chaine', 0, '', $conf->entity);
+    } else {
+        dolibarr_del_const($db, 'EMMCP_SQL_DB_PASSWORD', $conf->entity);
+    }
+}
+
+register_shutdown_function('emmcpReadonlyCleanup');
 
 // No dedicated account configured: the feature must simply not run. Falling
 // back to Dolibarr's own account would give a "read-only" feature full DML and
@@ -151,13 +232,7 @@ try {
 }
 
 // Now provision a genuine SELECT-only account for the rest of the run.
-$roUser = 'emmcp_ro_test';
-$roPass = 'ro_'.bin2hex(random_bytes(8));
-$provisioned = false;
-
-$db->query("CREATE USER IF NOT EXISTS '".$db->escape($roUser)."'@'%' IDENTIFIED BY '".$db->escape($roPass)."'");
-$db->query("GRANT SELECT ON `".$dolibarr_main_db_name."`.* TO '".$db->escape($roUser)."'@'%'");
-$db->query("FLUSH PRIVILEGES");
+list($roUser, $roPass) = makeTestAccount('emmcp_ro', 'SELECT');
 
 $resql = $db->query("SELECT COUNT(*) as n FROM mysql.user WHERE user = '".$db->escape($roUser)."'");
 $obj = $resql ? $db->fetch_object($resql) : null;
@@ -187,13 +262,8 @@ $overPrivileged = array(
 $probeUsers = array();
 
 foreach ($overPrivileged as $label => $grant) {
-	$pUser = 'emmcp_probe_'.substr(md5($label), 0, 8);
-	$pPass = 'p_'.bin2hex(random_bytes(6));
+	list($pUser, $pPass) = makeTestAccount('emmcp_probe', $grant);
 	$probeUsers[] = $pUser;
-
-	$db->query("CREATE USER IF NOT EXISTS '".$db->escape($pUser)."'@'%' IDENTIFIED BY '".$db->escape($pPass)."'");
-	$db->query("GRANT ".$grant." ON `".$dolibarr_main_db_name."`.* TO '".$db->escape($pUser)."'@'%'");
-	$db->query("FLUSH PRIVILEGES");
 
 	dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $pUser, 'chaine', 0, '', $conf->entity);
 	dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', $pPass, 'chaine', 0, '', $conf->entity);
@@ -217,10 +287,11 @@ foreach ($overPrivileged as $label => $grant) {
 }
 
 // A global SELECT reaches every database on the server.
-$gUser = 'emmcp_probe_global';
-$gPass = 'p_'.bin2hex(random_bytes(6));
+$gUser = substr('emmcp_probe_g_'.bin2hex(random_bytes(4)), 0, 32);
+$gPass = 'p_'.bin2hex(random_bytes(8));
 $probeUsers[] = $gUser;
-$db->query("CREATE USER IF NOT EXISTS '".$db->escape($gUser)."'@'%' IDENTIFIED BY '".$db->escape($gPass)."'");
+$createdDbUsers[] = $gUser;
+$db->query("CREATE USER '".$db->escape($gUser)."'@'%' IDENTIFIED BY '".$db->escape($gPass)."'");
 $db->query("GRANT SELECT ON *.* TO '".$db->escape($gUser)."'@'%'");
 $db->query("FLUSH PRIVILEGES");
 dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $gUser, 'chaine', 0, '', $conf->entity);
@@ -392,13 +463,16 @@ function serverRefuses($link, $sql)
 	}
 }
 
+$probeTable = MAIN_DB_PREFIX.'emmcp_probe_'.bin2hex(random_bytes(4));
+$createdProbeTables[] = $probeTable;
+
 try {
 	$link = new mysqli($dolibarr_main_db_host, $roUser, $roPass, $dolibarr_main_db_name, !empty($dolibarr_main_db_port) ? (int) $dolibarr_main_db_port : 3306);
 	check('test account can connect', !$link->connect_errno, (string) $link->connect_error);
 
 	check(
 		'server refuses DDL for the test account',
-		serverRefuses($link, "CREATE TABLE ".MAIN_DB_PREFIX."emmcp_grant_probe (a int)")
+		serverRefuses($link, "CREATE TABLE ".$probeTable." (a int)")
 	);
 	check(
 		'server refuses UPDATE for the test account',
@@ -418,22 +492,17 @@ try {
 }
 
 print "\n== Cleanup ==\n";
-$db->query("DROP TABLE IF EXISTS ".MAIN_DB_PREFIX."emmcp_grant_probe");
-$db->query("DROP USER IF EXISTS '".$db->escape($roUser)."'@'%'");
-$db->query("FLUSH PRIVILEGES");
+emmcpReadonlyCleanup();
+
 $resql = $db->query("SELECT COUNT(*) as n FROM mysql.user WHERE user = '".$db->escape($roUser)."'");
 $obj = $resql ? $db->fetch_object($resql) : null;
 check('test account removed', $obj && (int) $obj->n === 0);
 
-// Restore whatever was configured before the run.
-if ($initialDbUser !== '') {
-	dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $initialDbUser, 'chaine', 0, '', $conf->entity);
-	dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', $initialDbPass, 'chaine', 0, '', $conf->entity);
-} else {
-	dolibarr_del_const($db, 'EMMCP_SQL_DB_USER', $conf->entity);
-	dolibarr_del_const($db, 'EMMCP_SQL_DB_PASSWORD', $conf->entity);
-}
-print "  restored the previous credential settings\n";
+$resql = $db->query("SHOW TABLES LIKE '".$db->escape($probeTable)."'");
+check('probe table removed', $resql && $db->num_rows($resql) === 0);
+
+$stillSet = (getDolGlobalString('EMMCP_SQL_DB_USER') !== '');
+check('credential constant restored to its initial presence', $stillSet === $initialDbUserSet);
 
 print "\n".($failures === 0 ? "ALL CHECKS PASSED\n" : $failures." CHECK(S) FAILED\n");
 exit($failures === 0 ? 0 : 1);

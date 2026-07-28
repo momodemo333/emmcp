@@ -52,7 +52,11 @@ if (!$user->admin) {
 // Dolibarr does not replay init() when a customer merely uploads new files, and
 // this module has no business UI to hang a hook on: its entry points carry the
 // migration instead. See EmmcpMigrations for the full reasoning.
-EmmcpMigrations::runIfNeeded($db);
+//
+// A failure is surfaced rather than ignored: the settings below write to tables
+// the migration is responsible for, so letting an administrator toggle things
+// against a stale schema produces confusing half-failures.
+$schemaReady = EmmcpMigrations::runIfNeeded($db);
 
 $permissions = new EmmcpSqlPermissions($db, $conf);
 
@@ -82,6 +86,13 @@ if ($action !== '') {
 	$token = GETPOST('token', 'alpha');
 	if (!$token || $token !== newToken()) {
 		// CSRF protection: drop the request and come back to a clean page.
+		header('Location: '.$_SERVER['PHP_SELF']);
+		exit;
+	}
+
+	// Every action here writes to a table the migration owns.
+	if (!$schemaReady) {
+		setEventMessages($langs->trans('EmmcpSqlSchemaOutOfDate'), null, 'errors');
 		header('Location: '.$_SERVER['PHP_SELF']);
 		exit;
 	}
@@ -170,6 +181,12 @@ $head = emmcpAdminPrepareHead();
 print dol_get_fiche_head($head, 'sqlaccess', $langs->trans('EmmcpName'), -1, 'technic');
 
 print '<span class="opacitymedium">'.$langs->trans('EmmcpSqlAccessIntro').'</span><br><br>';
+
+if (!$schemaReady) {
+	print '<div class="error" style="padding:12px;margin:10px 0;">';
+	print dol_escape_htmltag($langs->trans('EmmcpSqlSchemaOutOfDate'));
+	print '</div>';
+}
 
 // ---------------------------------------------------------------------------
 // Section 1 — global switch

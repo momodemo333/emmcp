@@ -194,7 +194,14 @@ if (!isModEnabled('emmcp')) {
 // this module has no business UI to hang a hook on. Its entry points carry the
 // migration instead, so the schema is current on the first call after upgrade.
 dol_include_once('/emmcp/class/emmcpmigrations.class.php');
-EmmcpMigrations::runIfNeeded($db);
+if (!EmmcpMigrations::runIfNeeded($db)) {
+	// Continuing would run the module against a schema it does not expect:
+	// missing columns surface as opaque tool errors, and an audit table that
+	// failed to migrate means calls would go unrecorded. Refuse instead, and
+	// say nothing specific to the client — the detail is in the server log.
+	dol_syslog('[EMMCP] Database migration failed; refusing MCP requests', LOG_ERR);
+	emmcp_error(503, -32003, 'Service temporarily unavailable: the module database schema is not up to date.');
+}
 
 // --- Authentication -------------------------------------------------------
 dol_include_once('/emmcp/lib/emmcp.lib.php');

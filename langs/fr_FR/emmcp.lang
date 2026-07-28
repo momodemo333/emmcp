@@ -111,3 +111,4 @@ EmmcpResources=Ressources
 EmmcpChangelog=Journal des modifications (CHANGELOG)
 EmmcpAboutMcp=À propos du Model Context Protocol
 EmmcpEditor=Éditeur
+EmmcpSqlSchemaOutOfDate=La mise à jour de la base de données du module a échoué : le schéma n'est pas à jour. Les réglages ci-dessous sont désactivés et l'endpoint MCP refuse les requêtes. Consultez le journal Dolibarr (préfixe [EMMCP]) pour le détail.
