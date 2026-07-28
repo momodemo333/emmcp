@@ -137,15 +137,18 @@ class EmmcpSqlCapability implements \DolibarrMcp\Sql\SqlCapabilityInterface
 	/**
 	 * Record a schema introspection: it reveals which modules an instance runs.
 	 *
+	 * The caller withholds the schema when this returns false, so the outcome
+	 * is reported honestly rather than swallowed.
+	 *
 	 * @param  string|null $tableFilter Filter as submitted
 	 * @param  int         $tableCount  Tables described
 	 * @param  int         $durationMs  Duration
-	 * @return void
+	 * @return bool                     True when the entry was written
 	 */
-	public function auditSchemaAccess(?string $tableFilter, int $tableCount, int $durationMs): void
+	public function auditSchemaAccess(?string $tableFilter, int $tableCount, int $durationMs): bool
 	{
 		try {
-			$this->audit->record(
+			return (bool) $this->audit->record(
 				(int) $this->user->id,
 				'[schema] '.($tableFilter !== null && $tableFilter !== '' ? $tableFilter : '*'),
 				$durationMs,
@@ -158,6 +161,8 @@ class EmmcpSqlCapability implements \DolibarrMcp\Sql\SqlCapabilityInterface
 			);
 		} catch (Throwable $e) {
 			dol_syslog('[EMMCP] Could not audit a schema introspection: '.$e->getMessage(), LOG_ERR);
+
+			return false;
 		}
 	}
 

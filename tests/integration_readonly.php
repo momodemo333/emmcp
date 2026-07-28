@@ -76,6 +76,18 @@ function check($label, $ok, $detail = '')
 	}
 }
 
+// Loaded up front: the gateway now inspects the account's grants through the
+// package's GrantInspector and refuses to run without it. mcp.php loads the
+// autoloader before building the capability, so this mirrors production.
+$autoload = dol_buildpath('/emmcp/vendor/dolibarr-mcp-server/vendor/autoload.php', 0);
+if (!file_exists($autoload)) {
+	$autoload = dol_buildpath('/dalfred/dolibarr-mcp-server/vendor/autoload.php', 0);
+}
+if (file_exists($autoload)) {
+	require_once $autoload;
+}
+check('MCP package autoloader available', class_exists('\\DolibarrMcp\\Sql\\GrantInspector'));
+
 print "== Migrations ==\n";
 dol_include_once('/emmcp/class/emmcpmigrations.class.php');
 $migrations = new EmmcpMigrations($db);
@@ -158,6 +170,77 @@ if (!$provisioned) {
 	exit(1);
 }
 
+dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $roUser, 'chaine', 0, '', $conf->entity);
+dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', $roPass, 'chaine', 0, '', $conf->entity);
+$conf->global->EMMCP_SQL_DB_USER = $roUser;
+$conf->global->EMMCP_SQL_DB_PASSWORD = $roPass;
+
+print "\n== Gateway: over-privileged accounts are refused ==\n";
+// Being dedicated is not the same as being restricted: nothing stops an
+// administrator from creating a separate account and granting it everything.
+// These accounts are all "dedicated" and all must be refused.
+$overPrivileged = array(
+	'select_plus_insert' => 'SELECT, INSERT',
+	'select_plus_create' => 'SELECT, CREATE',
+	'select_plus_execute' => 'SELECT, EXECUTE',
+);
+$probeUsers = array();
+
+foreach ($overPrivileged as $label => $grant) {
+	$pUser = 'emmcp_probe_'.substr(md5($label), 0, 8);
+	$pPass = 'p_'.bin2hex(random_bytes(6));
+	$probeUsers[] = $pUser;
+
+	$db->query("CREATE USER IF NOT EXISTS '".$db->escape($pUser)."'@'%' IDENTIFIED BY '".$db->escape($pPass)."'");
+	$db->query("GRANT ".$grant." ON `".$dolibarr_main_db_name."`.* TO '".$db->escape($pUser)."'@'%'");
+	$db->query("FLUSH PRIVILEGES");
+
+	dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $pUser, 'chaine', 0, '', $conf->entity);
+	dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', $pPass, 'chaine', 0, '', $conf->entity);
+	$conf->global->EMMCP_SQL_DB_USER = $pUser;
+	$conf->global->EMMCP_SQL_DB_PASSWORD = $pPass;
+
+	try {
+		(new EmmcpSqlGateway(5, 10, 262144))->runSelect('SELECT rowid FROM '.MAIN_DB_PREFIX.'societe LIMIT 1');
+		check('refused: account with '.$grant, false, 'the query ran');
+	} catch (Throwable $e) {
+		$msg = $e->getMessage();
+		check('refused: account with '.$grant, true);
+		// Grant lines carry the account password hash; the reason must not
+		// quote one.
+		check(
+			'  refusal reason quotes no grant line',
+			stripos($msg, 'IDENTIFIED') === false && stripos($msg, 'GRANT USAGE') === false,
+			$msg
+		);
+	}
+}
+
+// A global SELECT reaches every database on the server.
+$gUser = 'emmcp_probe_global';
+$gPass = 'p_'.bin2hex(random_bytes(6));
+$probeUsers[] = $gUser;
+$db->query("CREATE USER IF NOT EXISTS '".$db->escape($gUser)."'@'%' IDENTIFIED BY '".$db->escape($gPass)."'");
+$db->query("GRANT SELECT ON *.* TO '".$db->escape($gUser)."'@'%'");
+$db->query("FLUSH PRIVILEGES");
+dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $gUser, 'chaine', 0, '', $conf->entity);
+dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', $gPass, 'chaine', 0, '', $conf->entity);
+$conf->global->EMMCP_SQL_DB_USER = $gUser;
+$conf->global->EMMCP_SQL_DB_PASSWORD = $gPass;
+try {
+	(new EmmcpSqlGateway(5, 10, 262144))->runSelect('SELECT rowid FROM '.MAIN_DB_PREFIX.'societe LIMIT 1');
+	check('refused: account with global SELECT', false, 'the query ran');
+} catch (Throwable $e) {
+	check('refused: account with global SELECT', true);
+}
+
+foreach ($probeUsers as $pUser) {
+	$db->query("DROP USER IF EXISTS '".$db->escape($pUser)."'@'%'");
+}
+$db->query("FLUSH PRIVILEGES");
+check('probe accounts removed', true);
+
+// Back to the genuinely SELECT-only account for the rest of the run.
 dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $roUser, 'chaine', 0, '', $conf->entity);
 dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', $roPass, 'chaine', 0, '', $conf->entity);
 $conf->global->EMMCP_SQL_DB_USER = $roUser;

@@ -77,6 +77,7 @@ class EmmcpSqlGateway
 
 		$link = $this->connect();
 		$started = microtime(true);
+		$result = null;
 
 		try {
 			// Engine-level read-only guarantee: any write attempt that slipped
@@ -94,6 +95,7 @@ class EmmcpSqlGateway
 				? $link->use_result()
 				: false;
 			if ($result === false) {
+				$result = null;
 				throw new Exception('Query execution failed: '.$link->error);
 			}
 
@@ -102,32 +104,23 @@ class EmmcpSqlGateway
 			$bytes = 0;
 			$truncated = false;
 
-			if ($result instanceof mysqli_result) {
-				foreach ($result->fetch_fields() as $field) {
-					$columns[] = $field->name;
-				}
-
-				while ($row = $result->fetch_assoc()) {
-					if (count($rows) >= $this->maxRows) {
-						$truncated = true;
-						break;
-					}
-					$encoded = json_encode($row, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-					$bytes += is_string($encoded) ? strlen($encoded) : 0;
-					if ($bytes > $this->maxBytes) {
-						$truncated = true;
-						break;
-					}
-					$rows[] = $row;
-				}
-
-				// An unbuffered result must be drained before the connection
-				// accepts another statement, or ROLLBACK fails with "commands
-				// out of sync". free() discards the remainder server-side.
-				$result->free();
+			foreach ($result->fetch_fields() as $field) {
+				$columns[] = $field->name;
 			}
 
-			$link->query('ROLLBACK');
+			while ($row = $result->fetch_assoc()) {
+				if (count($rows) >= $this->maxRows) {
+					$truncated = true;
+					break;
+				}
+				$encoded = json_encode($row, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+				$bytes += is_string($encoded) ? strlen($encoded) : 0;
+				if ($bytes > $this->maxBytes) {
+					$truncated = true;
+					break;
+				}
+				$rows[] = $row;
+			}
 
 			return array(
 				'columns' => $columns,
@@ -137,11 +130,23 @@ class EmmcpSqlGateway
 				'duration_ms' => (int) round((microtime(true) - $started) * 1000),
 				'bytes' => $bytes,
 			);
-		} catch (Throwable $e) {
-			// Never leave the dedicated connection inside a transaction.
-			@$link->query('ROLLBACK');
-			throw $e;
 		} finally {
+			// Order matters and the cleanup must survive an exception thrown
+			// mid-read. An unbuffered result holds the connection until it is
+			// drained: issuing ROLLBACK first fails with "commands out of
+			// sync" and would leave the transaction open.
+			if ($result instanceof mysqli_result) {
+				try {
+					$result->free();
+				} catch (Throwable $ignored) {
+					// nothing useful to do; the close below releases it anyway
+				}
+			}
+			try {
+				@$link->query('ROLLBACK');
+			} catch (Throwable $ignored) {
+				// same
+			}
 			$this->disconnect();
 		}
 	}
@@ -301,6 +306,7 @@ class EmmcpSqlGateway
 		// must not run a query at all.
 		try {
 			$this->assertNotApplicationAccount($link, $dolibarr_main_db_user);
+			$this->assertAccountIsReadOnly($link);
 			$this->applySafeSqlMode($link);
 			$this->applyStatementTimeout($link);
 		} catch (Throwable $e) {
@@ -379,6 +385,53 @@ class EmmcpSqlGateway
 				'The reporting connection resolved to the Dolibarr application account. '
 					.'Configure a separate account granted SELECT only.'
 			);
+		}
+	}
+
+	/**
+	 * Read the account's own grants and refuse anything beyond SELECT here.
+	 *
+	 * A dedicated account is not necessarily a restricted one — nothing stops
+	 * an administrator from creating a separate account and granting it
+	 * everything. Only SHOW GRANTS says what the server will actually enforce.
+	 *
+	 * Grant lines contain the account's password hash, so neither the log nor
+	 * the exception message may quote one; the inspector is built for that.
+	 *
+	 * @param  mysqli $link Connection
+	 * @return void
+	 * @throws Exception
+	 */
+	private function assertAccountIsReadOnly($link)
+	{
+		if (!class_exists('\\DolibarrMcp\\Sql\\GrantInspector')) {
+			throw new Exception('The MCP server package is missing its grant inspector; refusing to run.');
+		}
+
+		$lines = array();
+		try {
+			$resql = $link->query('SHOW GRANTS FOR CURRENT_USER()');
+			if ($resql instanceof mysqli_result) {
+				while ($row = $resql->fetch_row()) {
+					$lines[] = (string) $row[0];
+				}
+				$resql->free();
+			}
+		} catch (Throwable $e) {
+			// Fail closed: without the grants we cannot claim the account is
+			// read-only. The message may carry a grant fragment, so it is not
+			// relayed.
+			dol_syslog('[EMMCP] Could not list grants for the SQL account', LOG_ERR);
+			throw new Exception('The database account privileges could not be verified; refusing to run.');
+		}
+
+		try {
+			(new \DolibarrMcp\Sql\GrantInspector())->assertReadOnly($lines, $this->database);
+		} catch (\DolibarrMcp\Sql\SqlValidationException $e) {
+			// The inspector's message states the reason without quoting a
+			// grant line, so it is safe to log and to surface to the admin.
+			dol_syslog('[EMMCP] SQL account rejected: '.$e->getMessage(), LOG_ERR);
+			throw new Exception($e->getMessage());
 		}
 	}
 

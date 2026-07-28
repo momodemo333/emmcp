@@ -43,10 +43,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Auth, session and configuration tables (`llx_const`, `llx_session`,
   `llx_emmcp_oauth_*`, `llx_oauth_token`) are unreachable, as are the system
   databases.
+- **A dedicated database account is required, and its privileges are verified.**
+  There is no fallback to Dolibarr's own account, and on every connection the
+  module reads `SHOW GRANTS` and refuses to run unless the account holds only
+  global `USAGE` and `SELECT` on this database — a *dedicated* account is not
+  necessarily a *restricted* one. Grant lines carry the account password hash,
+  so none is ever logged or surfaced.
 - Execution runs on a dedicated connection inside a read-only transaction, with
   a normalised `sql_mode` and a statement timeout — both verified, and a failure
   to apply either aborts rather than degrades — plus server-imposed row and byte
-  caps. Database errors are never relayed verbatim to the model.
+  caps, applied while streaming results rather than after materialising them.
+  Database errors are never relayed verbatim to the model.
+- A successful schema introspection that could not be recorded in the audit
+  trail is withheld, matching the rule already applied to successful queries.
+- The release ZIP is reproducible (fixed timestamps, sorted entries), and the
+  build refuses to bundle a dirty or unexpected version of either sibling
+  repository.
 - Dependency update: `guzzlehttp/guzzle` raised to 7.15.2 in the embedded MCP
   package, clearing four security advisories.
 

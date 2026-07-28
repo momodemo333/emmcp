@@ -85,7 +85,14 @@ configuration où c'est le serveur, et non le code applicatif, qui impose la
 lecture seule. Le module refuse d'ailleurs la connexion si le serveur
 authentifie malgré tout le compte applicatif.
 
-Le compte ne doit avoir ni `EXECUTE`, ni `FILE`, ni aucun privilège DML ou DDL :
+Le module **vérifie ces privilèges** plutôt que de les supposer : à chaque
+connexion il lit `SHOW GRANTS` et refuse de fonctionner si le compte détient
+autre chose que `USAGE` global et `SELECT` sur cette seule base. Un compte avec
+`SELECT` global, `INSERT`, `CREATE`, `EXECUTE`, `FILE`, `GRANT OPTION` ou un rôle
+est rejeté — un compte *dédié* n'est pas nécessairement un compte *restreint*.
+
+Le compte ne doit donc avoir ni `EXECUTE`, ni `FILE`, ni aucun privilège DML ou
+DDL :
 
 ```sql
 CREATE USER 'dolibarr_ro'@'%' IDENTIFIED BY '<mot de passe>';

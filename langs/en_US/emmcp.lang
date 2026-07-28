@@ -61,6 +61,7 @@ EmmcpSqlAllowMultiEntity=Allow in a multi-company setup
 EmmcpSqlAllowMultiEntityDesc=Off by default. Raw SQL cannot be reliably filtered per entity: outside the main entity, access is refused unless you explicitly lift this guard.
 EmmcpSqlDbCredentials=Dedicated read-only MySQL account (required)
 EmmcpSqlDbMissing=No read-only account is configured: SQL access stays unavailable even if the switch above is on.
+EmmcpSqlDbGrantsChecked=The module does more than require a separate account: on every connection it reads the privileges actually granted (SHOW GRANTS) and refuses to run unless the account holds only global USAGE and SELECT on this database. An account with global SELECT, INSERT, CREATE, EXECUTE, FILE, GRANT OPTION or a role is rejected.
 EmmcpSqlDbIntro=SQL access requires a MySQL account separate from Dolibarr's own, granted SELECT only. Until one is configured, no query runs. Why: a read-only transaction blocks data writes but not DDL (CREATE, DROP, ALTER cause an implicit commit); only a SELECT-only account makes the server itself enforce read-only. That account must have no EXECUTE, no FILE, and no DML or DDL privilege.
 EmmcpSqlDbCredentialsHelp=Example account creation, adapt to your server.
 EmmcpSqlDbGrantExample=Example: CREATE USER 'dolibarr_ro'@'localhost' IDENTIFIED BY '…'; GRANT SELECT ON `your_database`.* TO 'dolibarr_ro'@'localhost';

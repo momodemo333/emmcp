@@ -251,7 +251,7 @@ print '<br>';
 
 print load_fiche_titre($langs->trans('EmmcpSqlDbCredentials'), '', '');
 
-print '<div class="info">'.$langs->trans('EmmcpSqlDbIntro').'</div>';
+print '<div class="info">'.$langs->trans('EmmcpSqlDbIntro').'<br><br>'.$langs->trans('EmmcpSqlDbGrantsChecked').'</div>';
 
 // Without this account nothing runs, so say so where an administrator will
 // look rather than leaving them to discover it through a refused query.

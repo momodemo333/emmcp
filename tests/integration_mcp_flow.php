@@ -103,11 +103,100 @@ $initialOptIn = $permissions->hasUserOptIn(1);
 $initialDbUser = getDolGlobalString('EMMCP_SQL_DB_USER');
 $initialDbPass = getDolGlobalString('EMMCP_SQL_DB_PASSWORD');
 
+// Marker for the audit rows this run creates, so they can be removed again.
+$resql = $db->query("SELECT COALESCE(MAX(rowid), 0) AS m FROM ".MAIN_DB_PREFIX."emmcp_sql_audit");
+$obj = $resql ? $db->fetch_object($resql) : null;
+$auditMarker = $obj ? (int) $obj->m : 0;
+
+$grantedForTest = false;
+$rightId = 0;
+
+/**
+ * Put the instance back exactly as it was found.
+ *
+ * Registered as a shutdown function rather than only called at the end: a
+ * failed assertion, an exception or a fatal would otherwise leave the feature
+ * enabled, a right granted and a database account lying around. Idempotent, so
+ * calling it explicitly and having it run again at shutdown is harmless.
+ *
+ * @return void
+ */
+function emmcpFlowCleanup()
+{
+	global $db, $conf, $roUser, $initialFlag, $initialOptIn, $initialDbUser, $initialDbPass;
+	global $auditMarker, $grantedForTest, $rightId;
+
+	static $done = false;
+	if ($done) {
+		return;
+	}
+	$done = true;
+
+	if (!empty($roUser)) {
+		$db->query("DROP USER IF EXISTS '".$db->escape($roUser)."'@'%'");
+		$db->query("FLUSH PRIVILEGES");
+	}
+
+	if ($initialDbUser !== '') {
+		dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $initialDbUser, 'chaine', 0, '', $conf->entity);
+		dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', $initialDbPass, 'chaine', 0, '', $conf->entity);
+	} else {
+		dolibarr_del_const($db, 'EMMCP_SQL_DB_USER', $conf->entity);
+		dolibarr_del_const($db, 'EMMCP_SQL_DB_PASSWORD', $conf->entity);
+	}
+
+	dolibarr_set_const($db, 'EMMCP_SQL_ENABLED', (string) $initialFlag, 'chaine', 0, '', $conf->entity);
+
+	dol_include_once('/emmcp/class/emmcpsqlpermissions.class.php');
+	(new EmmcpSqlPermissions($db, $conf))->setUserOptIn(1, $initialOptIn, 1);
+
+	if ($grantedForTest && !empty($rightId)) {
+		$db->query("DELETE FROM ".MAIN_DB_PREFIX."user_rights WHERE fk_user = 1 AND fk_id = ".((int) $rightId));
+	}
+
+	// The run writes audit rows on purpose; leaving them would make the trail
+	// grow on every replay and break later "the trail is empty" assertions.
+	$db->query("DELETE FROM ".MAIN_DB_PREFIX."emmcp_sql_audit WHERE rowid > ".((int) $auditMarker));
+}
+
+/**
+ * Snapshot of everything the run is expected to have restored.
+ *
+ * @return array<string, mixed>
+ */
+function emmcpFlowInspectState()
+{
+	global $db, $roUser;
+
+	$one = function ($sql) use ($db) {
+		$resql = $db->query($sql);
+		$obj = $resql ? $db->fetch_object($resql) : null;
+
+		return $obj ? (int) $obj->n : -1;
+	};
+
+	return array(
+		'flag' => getDolGlobalInt('EMMCP_SQL_ENABLED'),
+		'optins' => $one("SELECT COUNT(*) AS n FROM ".MAIN_DB_PREFIX."emmcp_sql_permissions WHERE sql_enabled = 1"),
+		'rights' => $one(
+			"SELECT COUNT(*) AS n FROM ".MAIN_DB_PREFIX."user_rights ur"
+			." JOIN ".MAIN_DB_PREFIX."rights_def r ON r.id = ur.fk_id WHERE r.module = 'emmcp'"
+		),
+		'dbusers' => $one("SELECT COUNT(*) AS n FROM mysql.user WHERE user = '".$db->escape($roUser)."'"),
+		'audit_after_marker' => $one(
+			"SELECT COUNT(*) AS n FROM ".MAIN_DB_PREFIX."emmcp_sql_audit WHERE rowid > ".((int) $GLOBALS['auditMarker'])
+		),
+		'dbuser_const' => getDolGlobalString('EMMCP_SQL_DB_USER'),
+	);
+}
+
 // Execution now requires a dedicated SELECT-only account, so the flow test
 // provisions one and removes it at the end.
 global $dolibarr_main_db_name, $dolibarr_main_db_user, $dolibarr_main_db_pass;
 $roUser = 'emmcp_flow_test';
 $roPass = 'ro_'.bin2hex(random_bytes(8));
+
+register_shutdown_function('emmcpFlowCleanup');
 $db->query("CREATE USER IF NOT EXISTS '".$db->escape($roUser)."'@'%' IDENTIFIED BY '".$db->escape($roPass)."'");
 $db->query("GRANT SELECT ON `".$dolibarr_main_db_name."`.* TO '".$db->escape($roUser)."'@'%'");
 $db->query("FLUSH PRIVILEGES");
@@ -293,26 +382,19 @@ if ($code === null) {
 }
 
 print "\n== Restoring initial state ==\n";
-$db->query("DROP USER IF EXISTS '".$db->escape($roUser)."'@'%'");
-$db->query("FLUSH PRIVILEGES");
-if ($initialDbUser !== '') {
-	dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $initialDbUser, 'chaine', 0, '', $conf->entity);
-	dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', $initialDbPass, 'chaine', 0, '', $conf->entity);
-} else {
-	dolibarr_del_const($db, 'EMMCP_SQL_DB_USER', $conf->entity);
-	dolibarr_del_const($db, 'EMMCP_SQL_DB_PASSWORD', $conf->entity);
-}
-$resql = $db->query("SELECT COUNT(*) as n FROM mysql.user WHERE user = '".$db->escape($roUser)."'");
-$obj = $resql ? $db->fetch_object($resql) : null;
-check('test account removed', $obj && (int) $obj->n === 0);
+emmcpFlowCleanup();
 
-dolibarr_set_const($db, 'EMMCP_SQL_ENABLED', (string) $initialFlag, 'chaine', 0, '', $conf->entity);
-$permissions->setUserOptIn(1, $initialOptIn, 1);
-if ($grantedForTest && !empty($rightId)) {
-	$db->query("DELETE FROM ".MAIN_DB_PREFIX."user_rights WHERE fk_user = 1 AND fk_id = ".((int) $rightId));
-	print "  revoked the temporarily granted right\n";
-}
-print "  restored EMMCP_SQL_ENABLED=".$initialFlag.", opt-in=".($initialOptIn ? '1' : '0')."\n";
+// Everything the run touched must be back as it was, so the script can be
+// replayed indefinitely without accumulating state — including audit rows,
+// which would otherwise make "the trail is empty" impossible to assert later.
+$state = emmcpFlowInspectState();
+
+check('SQL access is disabled again', (int) $state['flag'] === (int) $initialFlag, (string) $state['flag']);
+check('no opt-in left behind', $state['optins'] === 0, (string) $state['optins']);
+check('temporary right revoked', $state['rights'] === 0, (string) $state['rights']);
+check('test account removed', $state['dbusers'] === 0, (string) $state['dbusers']);
+check('audit rows created by this run were purged', $state['audit_after_marker'] === 0, (string) $state['audit_after_marker']);
+check('credential constants restored', $state['dbuser_const'] === $initialDbUser, $state['dbuser_const']);
 
 print "\n".($failures === 0 ? "ALL CHECKS PASSED\n" : $failures." CHECK(S) FAILED\n");
 exit($failures === 0 ? 0 : 1);

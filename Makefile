@@ -87,6 +87,15 @@ lint:
 # checked out — a work-in-progress branch, or a stale tree.
 EXPECTED_RUNTIME_VERSION ?= 2.2.0
 
+# Same for the shared OAuth library: it is a third separate repository, and the
+# build would otherwise bundle whatever is checked out beside it.
+EXPECTED_OAUTH_VERSION ?= 1.0.0
+REQUIRED_OAUTH_TAG ?=
+
+# Fixed timestamp for every entry in the ZIP. Any constant works; what matters
+# is that it does not change between builds of the same sources.
+SOURCE_DATE_EPOCH ?= 1700000000
+
 # Set to the tag the runtime must be built from. Left empty, a clean working
 # tree at the expected version is accepted, which is what dev builds need. The
 # release target sets it, so a published ZIP can only come from a tagged commit.
@@ -118,7 +127,31 @@ check-runtime:
 	@echo "  runtime $(EXPECTED_RUNTIME_VERSION) verified ($(MCP_PACKAGE_SRC))"
 .PHONY: check-runtime
 
-build-release: check-runtime
+check-oauth:
+	@test -d "$(LIB_OAUTH_SRC)/src" || (echo "$(RED)dolibarr-mcp-oauth source not found: $(LIB_OAUTH_SRC)$(NC)" && exit 1)
+	@cd $(LIB_OAUTH_SRC) && \
+	if [ -n "$$(git status --porcelain)" ]; then \
+		echo "$(RED)dolibarr-mcp-oauth checkout is dirty; commit or stash before building.$(NC)"; \
+		git status --short; \
+		exit 1; \
+	fi
+	@cd $(LIB_OAUTH_SRC) && \
+	if ! git tag --list "v$(EXPECTED_OAUTH_VERSION)" | grep -qx "v$(EXPECTED_OAUTH_VERSION)"; then \
+		echo "$(RED)dolibarr-mcp-oauth has no tag v$(EXPECTED_OAUTH_VERSION).$(NC)"; \
+		exit 1; \
+	fi
+	@if [ -n "$(REQUIRED_OAUTH_TAG)" ]; then \
+		cd $(LIB_OAUTH_SRC) && \
+		if ! git describe --exact-match --tags HEAD 2>/dev/null | grep -qx "$(REQUIRED_OAUTH_TAG)"; then \
+			echo "$(RED)dolibarr-mcp-oauth HEAD is not at tag $(REQUIRED_OAUTH_TAG).$(NC)"; \
+			exit 1; \
+		fi; \
+		echo "  oauth library pinned to tag $(REQUIRED_OAUTH_TAG)"; \
+	fi
+	@echo "  oauth library $(EXPECTED_OAUTH_VERSION) verified ($(LIB_OAUTH_SRC))"
+.PHONY: check-oauth
+
+build-release: check-runtime check-oauth
 	@echo "$(GREEN)Building emMCP v$(VERSION)...$(NC)"
 	@test -d "$(MCP_PACKAGE_SRC)" || (echo "$(RED)MCP package source not found: $(MCP_PACKAGE_SRC)$(NC)" && exit 1)
 	@rm -rf $(BUILD_DIR)
@@ -159,9 +192,16 @@ build-release: check-runtime
 	done
 	@echo "  all $(words $(CRITICAL_FILES)) critical files present"
 
-	@echo "[7/7] Creating ZIP..."
+	@echo "[7/7] Creating ZIP (reproducible)..."
 	@rm -f $(RELEASE_DIR)/$(RELEASE_FILENAME) $(RELEASE_DIR)/$(RELEASE_FILENAME).sha256
-	@cd $(BUILD_DIR) && zip -rq $(RELEASE_DIR)/$(RELEASE_FILENAME) $(MODULE_NAME)/
+# Two builds of the same sources must yield the same checksum, otherwise the
+# hash proves nothing about what is inside. Three things break that: file
+# mtimes, the order entries are added in, and the extra attributes zip stores
+# by default. All three are pinned here.
+	@find $(BUILD_DIR) -exec touch -h -d "@$(SOURCE_DATE_EPOCH)" {} + 2>/dev/null || \
+		find $(BUILD_DIR) -exec touch -d "@$(SOURCE_DATE_EPOCH)" {} +
+	@cd $(BUILD_DIR) && find $(MODULE_NAME) -print | LC_ALL=C sort | \
+		zip -qX -@ $(RELEASE_DIR)/$(RELEASE_FILENAME)
 	@cd $(RELEASE_DIR) && sha256sum $(RELEASE_FILENAME) > $(RELEASE_FILENAME).sha256
 	@rm -rf $(BUILD_DIR)
 	@echo ""
@@ -183,15 +223,20 @@ tag: check-git-clean
 	@git push origin "v$(VERSION)" 2>/dev/null || echo "$(YELLOW)No 'origin' remote — tag created locally only.$(NC)"
 	@echo "$(GREEN)Tag v$(VERSION) created.$(NC)"
 
-# A published ZIP may only be built from a tagged runtime. Order of operations:
-#   1. merge + push the runtime, then tag it v$(EXPECTED_RUNTIME_VERSION)
-#   2. merge + push emMCP
-#   3. make release   (verifies the runtime tag, then tags and builds emMCP)
-#   4. make publish
+# A published ZIP may only be built from tagged dependencies.
+#
+# Expected versions: runtime $(EXPECTED_RUNTIME_VERSION), oauth library
+# $(EXPECTED_OAUTH_VERSION). Order of operations:
+#   1. merge + push dolibarr-mcp-server, then tag it v$(EXPECTED_RUNTIME_VERSION)
+#   2. ensure dolibarr-mcp-oauth is at tag v$(EXPECTED_OAUTH_VERSION)
+#   3. merge + push emMCP
+#   4. make release   (verifies both tags, then tags and builds emMCP)
+#   5. make publish
 release: check-git-clean
 	@$(MAKE) REQUIRED_RUNTIME_TAG=v$(EXPECTED_RUNTIME_VERSION) check-runtime
+	@$(MAKE) REQUIRED_OAUTH_TAG=v$(EXPECTED_OAUTH_VERSION) check-oauth
 	@$(MAKE) tag
-	@$(MAKE) REQUIRED_RUNTIME_TAG=v$(EXPECTED_RUNTIME_VERSION) build-release
+	@$(MAKE) REQUIRED_RUNTIME_TAG=v$(EXPECTED_RUNTIME_VERSION) REQUIRED_OAUTH_TAG=v$(EXPECTED_OAUTH_VERSION) build-release
 	@echo "$(GREEN)Release v$(VERSION) complete.$(NC)"
 
 publish: ## Publish latest release to EMGateway
