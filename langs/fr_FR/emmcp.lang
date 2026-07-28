@@ -38,6 +38,66 @@ EmmcpOAuthConsentScope2=Agir via l'API REST avec vos permissions Dolibarr — ri
 EmmcpOAuthAccept=Autoriser
 EmmcpOAuthDeny=Refuser
 
+# Dolibarr permission
+EmmcpRightSqlQuery=Exécuter des requêtes SQL en lecture seule via MCP
+
+# SQL access page
+EmmcpSqlAccess=Accès SQL
+EmmcpSqlAccessIntro=Cette page ouvre, très progressivement, un accès SQL en lecture seule à la base Dolibarr depuis un client MCP. Chaque condition doit être remplie : fonctionnalité activée globalement, droit Dolibarr accordé à l'utilisateur, puis opt-in individuel ci-dessous. Rien n'est actif par défaut, et toute requête est journalisée.
+EmmcpSqlGlobalSwitch=Activation globale
+EmmcpSqlEnabled=Activer l'accès SQL en lecture seule
+EmmcpSqlEnabledDesc=Désactivé par défaut. Tant que ce commutateur est éteint, les outils SQL n'apparaissent même pas dans la liste des outils MCP.
+EmmcpSqlGloballyDisabled=L'accès SQL est désactivé globalement : aucun utilisateur ne peut exécuter de requête, quels que soient les réglages ci-dessous.
+EmmcpSqlLimits=Limites et journalisation
+EmmcpSqlMaxRows=Nombre maximum de lignes retournées
+EmmcpSqlMaxRowsDesc=Défaut 200, plafond %s. Au-delà, le résultat est tronqué et signalé comme tel à l'agent.
+EmmcpSqlTimeout=Délai maximum d'exécution (secondes)
+EmmcpSqlTimeoutDesc=Défaut 5, plafond %s. Appliqué par le serveur MySQL/MariaDB au niveau de la session.
+EmmcpSqlMaxBytes=Taille maximum de la réponse (octets)
+EmmcpSqlMaxBytesDesc=Défaut 262144 (256 Kio), plafond %s. Empêche qu'une requête large sature la réponse MCP.
+EmmcpSqlAuditHashOnly=Ne journaliser que l'empreinte des requêtes
+EmmcpSqlAuditHashOnlyDesc=Le texte d'une requête peut contenir des données personnelles dans sa clause WHERE. Activez cette option pour n'enregistrer que l'empreinte SHA-256, qui reste suffisante pour corréler des requêtes identiques.
+EmmcpSqlAllowMultiEntity=Autoriser en environnement multi-société
+EmmcpSqlAllowMultiEntityDesc=Désactivé par défaut. Une requête SQL brute ne peut pas être filtrée de façon fiable par entité : hors entité principale, l'accès est refusé sauf si vous levez explicitement ce garde-fou.
+EmmcpSqlDbCredentials=Compte MySQL dédié en lecture seule (obligatoire)
+EmmcpSqlDbMissing=Aucun compte de lecture seule n'est configuré : l'accès SQL reste indisponible même si le commutateur ci-dessus est activé.
+EmmcpSqlDbIntro=L'accès SQL exige un compte MySQL distinct de celui de Dolibarr, ne disposant que du privilège SELECT. Tant qu'il n'est pas renseigné, aucune requête n'est exécutée. Raison : une transaction en lecture seule empêche les écritures de données mais pas le DDL (CREATE, DROP, ALTER, qui provoquent un commit implicite) ; seul un compte restreint au SELECT fait imposer la lecture seule par le serveur lui-même. Ce compte ne doit avoir ni EXECUTE, ni FILE, ni aucun privilège DML ou DDL.
+EmmcpSqlDbCredentialsHelp=Exemple de création du compte, à adapter à votre serveur.
+EmmcpSqlDbGrantExample=Exemple : CREATE USER 'dolibarr_ro'@'localhost' IDENTIFIED BY '…'; GRANT SELECT ON `votre_base`.* TO 'dolibarr_ro'@'localhost';
+EmmcpSqlDbUser=Utilisateur MySQL
+EmmcpSqlDbUserDesc=Obligatoire. Doit être différent du compte applicatif de Dolibarr ; la connexion est refusée si le serveur authentifie malgré tout ce dernier.
+EmmcpSqlDbPassword=Mot de passe MySQL
+EmmcpSqlDbPasswordDesc=Inchangé si laissé vide. Le mot de passe enregistré n'est jamais réaffiché sur cette page.
+EmmcpSqlDbPasswordSet=Un mot de passe est enregistré (••••••••)
+EmmcpSqlDbPasswordNotSet=Aucun mot de passe enregistré
+EmmcpSqlDbClearPassword=Effacer le mot de passe enregistré
+EmmcpSqlUsers=Utilisateurs autorisés
+EmmcpSqlUsersWarning=Accorder cet accès donne à l'utilisateur une lecture large de la base de données, très au-delà de ses permissions métier Dolibarr habituelles : marges, salaires, tous les tiers sans restriction commerciale, et l'ensemble des tables non explicitement refusées. N'accordez cet accès qu'à des personnes qui ont déjà, sur le plan organisationnel, le droit de consulter l'intégralité de ces données.
+EmmcpSqlDolibarrRight=Droit Dolibarr
+EmmcpSqlRightMissing=Le droit « Exécuter des requêtes SQL en lecture seule via MCP » n'est pas accordé à cet utilisateur (onglet « Permissions » de sa fiche).
+EmmcpSqlOptIn=Opt-in individuel
+EmmcpSqlOptInHelp=L'opt-in individuel ne suffit pas à lui seul : le droit Dolibarr doit également être accordé depuis l'onglet « Permissions » de la fiche utilisateur, et l'accès doit être activé globalement.
+EmmcpSqlEffectiveAccess=Accès effectif
+EmmcpSqlNoUsers=Aucun utilisateur actif.
+EmmcpSqlPermissionsUpdated=Autorisation mise à jour.
+EmmcpSqlSettingsSaved=Réglages enregistrés.
+EmmcpSqlPolicy=Périmètre refusé
+EmmcpSqlPolicyIntro=Ces éléments sont refusés par la politique du serveur MCP, en plus de la validation qui n'accepte que SELECT et WITH. Cette liste est en lecture seule.
+EmmcpSqlPolicyUnavailable=Le paquet serveur MCP est introuvable : le détail du périmètre refusé ne peut pas être affiché.
+EmmcpSqlDeniedTables=Tables refusées
+EmmcpSqlDeniedColumns=Colonnes refusées
+EmmcpSqlDeniedFunctions=Fonctions refusées
+EmmcpSqlDeniedColumnFragments=Fragments de noms de colonnes refusés
+EmmcpSqlAuditTrail=20 dernières requêtes
+EmmcpSqlAuditTrailIntro=Les résultats des requêtes ne sont jamais enregistrés : seules les métadonnées et, selon le réglage ci-dessus, le texte tronqué de la requête ou sa seule empreinte.
+EmmcpSqlAuditDuration=Durée
+EmmcpSqlAuditRows=Lignes
+EmmcpSqlAuditSource=Origine
+EmmcpSqlAuditSuccess=Requête exécutée
+EmmcpSqlAuditQuery=Requête
+EmmcpSqlAuditHashOnlyRow=Empreinte seule :
+EmmcpSqlAuditEmpty=Aucune requête enregistrée.
+
 # About page
 EmmcpCompatibility=Compatibilité
 EmmcpCapabilities=Fonctionnalités

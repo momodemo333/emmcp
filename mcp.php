@@ -108,9 +108,93 @@ function emmcp_error($httpCode, $rpcCode, $message)
 	exit;
 }
 
+/**
+ * Build the read-only SQL capability, or null when the caller may not use it.
+ *
+ * Returning null is not a soft failure: the MCP runtime then excludes the SQL
+ * tools from attribute discovery entirely, so they never appear in tools/list.
+ * Deny-by-default is structural rather than a runtime check to remember.
+ *
+ * Must be called only after the dolibarr-mcp-server autoloader is required —
+ * EmmcpSqlCapability implements one of that package's interfaces.
+ *
+ * @param  DoliDB $db     Database handler
+ * @param  Conf   $conf   Dolibarr configuration
+ * @param  string $apiKey Caller's validated API key
+ * @return EmmcpSqlCapability|null
+ */
+function emmcpBuildSqlCapability($db, $conf, $apiKey)
+{
+	dol_include_once('/emmcp/class/emmcpsqlpermissions.class.php');
+
+	$permissions = new EmmcpSqlPermissions($db, $conf);
+
+	// Cheapest gate first: skip loading a User object on the overwhelmingly
+	// common path where the feature is simply off.
+	if (!$permissions->isGloballyEnabled()) {
+		return null;
+	}
+
+	$userId = emmcpResolveUserIdFromApiKey($db, $apiKey);
+	if ($userId <= 0) {
+		return null;
+	}
+
+	$mcpUser = new User($db);
+	if ($mcpUser->fetch($userId) <= 0) {
+		return null;
+	}
+	$mcpUser->getrights();
+
+	$denial = $permissions->denialCode($mcpUser);
+	if ($denial !== null) {
+		dol_syslog('[EMMCP] SQL access refused for user '.((int) $userId).': '.$denial, LOG_INFO);
+
+		return null;
+	}
+
+	dol_include_once('/emmcp/class/emmcpsqlgateway.class.php');
+	dol_include_once('/emmcp/class/emmcpsqlaudit.class.php');
+	dol_include_once('/emmcp/class/emmcpsqlcapability.class.php');
+
+	return new EmmcpSqlCapability($db, $conf, $mcpUser, 'mcp');
+}
+
+/**
+ * Resolve the Dolibarr user behind an API key.
+ *
+ * The shared OAuth library validates the key but its AuthResult only carries
+ * the key itself, so the lookup is repeated here rather than changing that
+ * library's contract and re-releasing it into two modules.
+ *
+ * @param  DoliDB $db     Database handler
+ * @param  string $apiKey Already-validated API key
+ * @return int            User rowid, or 0
+ */
+function emmcpResolveUserIdFromApiKey($db, $apiKey)
+{
+	$sql = "SELECT rowid FROM ".MAIN_DB_PREFIX."user";
+	$sql .= " WHERE api_key = '".$db->escape($apiKey)."'";
+	$sql .= " OR api_key = '".$db->escape(dolEncrypt($apiKey, '', '', 'dolibarr'))."'";
+
+	$resql = $db->query($sql);
+	if (!$resql || $db->num_rows($resql) !== 1) {
+		return 0;
+	}
+	$obj = $db->fetch_object($resql);
+
+	return $obj ? (int) $obj->rowid : 0;
+}
+
 if (!isModEnabled('emmcp')) {
 	emmcp_error(403, -32000, 'Module emMCP not enabled');
 }
+
+// Dolibarr does not replay init() when a customer only uploads new files, and
+// this module has no business UI to hang a hook on. Its entry points carry the
+// migration instead, so the schema is current on the first call after upgrade.
+dol_include_once('/emmcp/class/emmcpmigrations.class.php');
+EmmcpMigrations::runIfNeeded($db);
 
 // --- Authentication -------------------------------------------------------
 dol_include_once('/emmcp/lib/emmcp.lib.php');
@@ -150,12 +234,27 @@ $config = new DolibarrMcp\Config\ConnectionConfig(DOL_MAIN_URL_ROOT, $apiKey);
 // Persist MCP sessions between PHP-FPM requests
 $sessionDir = DOL_DATA_ROOT.'/emmcp/sessions';
 
+// --- Optional read-only SQL capability -------------------------------------
+//
+// Every other tool acts through the REST API and inherits the caller's
+// Dolibarr permissions for free. Raw SQL inherits nothing, so it is authorised
+// explicitly here — and only here. When the capability stays null the SQL tools
+// are not even discovered, so they never reach tools/list.
+$sqlCapability = emmcpBuildSqlCapability($db, $conf, $apiKey);
+
 try {
-	$response = DolibarrMcp\Bootstrap::handleHttpRequest(null, $sessionDir, $config);
+	$response = DolibarrMcp\Bootstrap::handleHttpRequest(null, $sessionDir, $config, $sqlCapability);
 	DolibarrMcp\Bootstrap::emit($response);
 } catch (Throwable $e) {
-	dol_syslog('[EMMCP] ERROR '.$e->getMessage(), LOG_ERR);
-	emmcp_error(500, -32603, 'Internal MCP server error: '.$e->getMessage());
+	// The detail stays on the server: exception messages here routinely carry
+	// file paths, database host names and account names, and this response goes
+	// to a remote MCP client.
+	dol_syslog(
+		'[EMMCP] ERROR '.get_class($e).': '.$e->getMessage()
+			.' at '.$e->getFile().':'.$e->getLine(),
+		LOG_ERR
+	);
+	emmcp_error(500, -32603, 'Internal MCP server error. See the Dolibarr log for details.');
 }
 
 $db->close();

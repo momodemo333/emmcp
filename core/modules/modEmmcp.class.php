@@ -50,7 +50,9 @@ class modEmmcp extends DolibarrModules
 		$this->descriptiondetail = 'EmmcpDescriptionDetail';
 		$this->editor_name = 'E-dem';
 		$this->editor_url = 'https://www.e-dem.com';
-		$this->version = '1.1.0';
+		// Keep in sync with EmmcpMigrations::MODULE_VERSION, or migrations
+		// silently stop running on existing installs.
+		$this->version = '1.2.0';
 		// Native Dolibarr "update available" check (compares this URL's answer to $this->version)
 		$this->url_last_version = 'https://www.e-dem.com/dolibarr/emmcp/last_version.php';
 		$this->const_name = 'MAIN_MODULE_'.strtoupper($this->name);
@@ -71,11 +73,26 @@ class modEmmcp extends DolibarrModules
 		$this->need_dolibarr_version = array(16, 0);
 
 		// Constants
+		//
+		// EMMCP_SQL_ENABLED is deliberately NOT declared here. Constants listed
+		// in $this->const are deleted by _remove() and recreated by _init(), so
+		// a disable/enable cycle — which every module update triggers — would
+		// silently re-open read-only SQL access after a customer turned it off.
+		// It is written by the admin page instead and survives on its own.
 		$this->const = array();
 
-		// Permissions: none for the POC — authentication and authorization
-		// are delegated to the user's API key and the REST API layer.
-		$this->rights = array();
+		// Permissions.
+		//
+		// The MCP tools themselves need none: they act through the REST API
+		// with the caller's API key and inherit that user's Dolibarr rights.
+		// Raw SQL cannot inherit anything, so it gets an explicit right, off
+		// for everyone until an administrator grants it.
+		$r = 0;
+		$this->rights[$r][0] = $this->numero + 1;
+		$this->rights[$r][1] = 'EmmcpRightSqlQuery';
+		$this->rights[$r][3] = 0; // not granted by default
+		$this->rights[$r][4] = 'sqlquery';
+		$this->rights[$r][5] = 'read';
 
 		// Menus: none for the POC
 		$this->menu = array();
@@ -89,9 +106,22 @@ class modEmmcp extends DolibarrModules
 	 */
 	public function init($options = '')
 	{
-		// Create OAuth tables (llx_emmcp_oauth_client, llx_emmcp_oauth_token)
+		// Create OAuth and read-only SQL tables
 		$result = $this->_load_tables('/emmcp/sql/');
 		if ($result < 0) {
+			return -1;
+		}
+
+		// Replay migrations too: _load_tables only creates missing tables, it
+		// does not alter existing ones. A failure here means the module would
+		// run against a schema it does not expect, so enabling must fail
+		// rather than leave the customer in that state.
+		dol_include_once('/emmcp/class/emmcpmigrations.class.php');
+		$migrations = new EmmcpMigrations($this->db);
+		if (!$migrations->run()) {
+			$this->error = 'Database migration failed: '.implode(', ', $migrations->getErrors());
+			dol_syslog('[EMMCP] '.$this->error, LOG_ERR);
+
 			return -1;
 		}
 

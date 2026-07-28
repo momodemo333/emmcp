@@ -24,7 +24,73 @@ transport Streamable HTTP) consommable par Claude Code, l'API Anthropic
 - **Tools** : les 20 tools du paquet
   [dolibarr-mcp-server](https://github.com/momodemo333/dolibarr-mcp-server)
   (CRUD générique, explorateur d'API, documents, lignes, actions métier,
-  extrafields, contacts, projets, génération de fichiers).
+  extrafields, contacts, projets, génération de fichiers), plus deux tools
+  de **requêtes SQL en lecture seule** désactivés par défaut (voir ci-dessous).
+
+## Requêtes SQL en lecture seule (optionnel, désactivé par défaut)
+
+Deux tools supplémentaires — `dolibarr_sql_schema` et `dolibarr_sql_query` —
+permettent à l'agent d'introspecter le schéma et d'exécuter des requêtes de
+reporting (`SELECT`, `WITH`/CTE, `JOIN`, sous-requêtes, agrégats, `UNION`) sur
+les tables métier, y compris celles des modules tiers.
+
+Contrairement aux autres tools, qui passent par l'API REST et héritent donc des
+permissions Dolibarr de l'appelant, une requête SQL n'hérite de rien. L'accès
+est donc reconstruit explicitement et **quatre conditions doivent toutes être
+réunies** :
+
+1. la fonctionnalité est activée globalement (onglet **Accès SQL** de la
+   configuration du module) ;
+2. l'utilisateur détient le droit Dolibarr *Exécuter des requêtes SQL en lecture
+   seule via MCP* — **être administrateur ne suffit pas**, le droit doit être
+   attribué ;
+3. l'utilisateur est explicitement coché dans la liste de l'onglet Accès SQL ;
+4. le module multicompany n'est pas actif (ou l'exception a été activée) — une
+   requête SQL traverse les lignes de toutes les entités, elle ne peut pas être
+   filtrée par entité de façon fiable.
+
+Tant que ces conditions ne sont pas réunies, les deux tools **n'apparaissent pas
+du tout** dans la liste des tools exposés au client MCP.
+
+⚠️ **Accorder ce droit donne une lecture large de la base**, très au-delà des
+permissions métier habituelles de l'utilisateur (marges, salaires, ensemble des
+tiers sans restriction commerciale). À réserver aux profils de type
+direction/contrôle de gestion.
+
+Garde-fous en place : une seule instruction par appel, aucune écriture ni DDL,
+aucune lecture verrouillante (`FOR UPDATE`, `FOR SHARE`, `LOCK IN SHARE MODE`),
+colonnes de credentials refusées où qu'elles apparaissent — noms exacts et
+motifs, donc `smtp_password` ou `access_token` aussi bien que `api_key` —,
+**`SELECT *` interdit sur toute table** (`COUNT(*)` reste autorisé), requêtes
+limitées à la base courante (`autre_base.llx_societe` refusé), commentaires
+exécutables et optimizer hints refusés, tables d'authentification et de session
+inaccessibles, exécution sur une connexion dédiée en transaction de lecture
+seule avec un `sql_mode` normalisé et un timeout obligatoire, plafonds de lignes
+et de taille imposés par le serveur, et journal d'audit
+(`llx_emmcp_sql_audit`) qui n'enregistre **jamais** les résultats.
+
+L'agent doit donc nommer les colonnes dont il a besoin ; c'est à cela que sert
+le tool d'introspection du schéma.
+
+### Compte MySQL dédié — prérequis obligatoire
+
+L'accès SQL exige un **compte MySQL distinct de celui de Dolibarr, ne disposant
+que du privilège `SELECT`**, à renseigner dans l'onglet Accès SQL. Tant qu'il
+n'est pas configuré, aucune requête n'est exécutée, même le commutateur activé.
+
+Ce n'est pas une précaution facultative : une transaction en lecture seule
+empêche les écritures de données mais **pas le DDL** (`CREATE`, `DROP`, `ALTER`
+provoquent un commit implicite). Un compte restreint au `SELECT` est la seule
+configuration où c'est le serveur, et non le code applicatif, qui impose la
+lecture seule. Le module refuse d'ailleurs la connexion si le serveur
+authentifie malgré tout le compte applicatif.
+
+Le compte ne doit avoir ni `EXECUTE`, ni `FILE`, ni aucun privilège DML ou DDL :
+
+```sql
+CREATE USER 'dolibarr_ro'@'%' IDENTIFIED BY '<mot de passe>';
+GRANT SELECT ON `votre_base`.* TO 'dolibarr_ro'@'%';
+```
 
 ## Prérequis (POC)
 
@@ -63,5 +129,8 @@ Tokens stockés en base sous forme de hash sha256 uniquement
 ## Limites connues du POC
 
 - Découverte des tools re-scannée à chaque requête (pas de cache PSR-16).
-- Pas de gestion multi-entité (multicompany).
+- Pas de gestion multi-entité (multicompany). L'accès SQL en lecture seule est
+  d'ailleurs refusé hors entité 1 tant que l'exception n'est pas activée.
 - Portée OAuth unique (`dolibarr`) : pas encore de granularité par scope.
+- Les requêtes SQL en lecture seule nécessitent MySQL ou MariaDB (PostgreSQL
+  n'est pas pris en charge par cette fonctionnalité).

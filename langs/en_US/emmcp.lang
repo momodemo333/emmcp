@@ -38,6 +38,66 @@ EmmcpOAuthConsentScope2=Act through the REST API with your Dolibarr permissions 
 EmmcpOAuthAccept=Authorize
 EmmcpOAuthDeny=Deny
 
+# Dolibarr permission
+EmmcpRightSqlQuery=Run read-only SQL queries through MCP
+
+# SQL access page
+EmmcpSqlAccess=SQL access
+EmmcpSqlAccessIntro=This page opens, very gradually, read-only SQL access to the Dolibarr database from an MCP client. Every condition must hold: the feature enabled globally, the Dolibarr right granted to the user, then the individual opt-in below. Nothing is on by default, and every query is recorded.
+EmmcpSqlGlobalSwitch=Global switch
+EmmcpSqlEnabled=Enable read-only SQL access
+EmmcpSqlEnabledDesc=Off by default. While this switch is off, the SQL tools do not even appear in the MCP tool list.
+EmmcpSqlGloballyDisabled=SQL access is globally disabled: no user can run a query, whatever the settings below.
+EmmcpSqlLimits=Limits and audit trail
+EmmcpSqlMaxRows=Maximum rows returned
+EmmcpSqlMaxRowsDesc=Default 200, hard ceiling %s. Beyond that the result is truncated, and reported as such to the agent.
+EmmcpSqlTimeout=Statement timeout (seconds)
+EmmcpSqlTimeoutDesc=Default 5, hard ceiling %s. Enforced by the MySQL/MariaDB server at session level.
+EmmcpSqlMaxBytes=Maximum response size (bytes)
+EmmcpSqlMaxBytesDesc=Default 262144 (256 KiB), hard ceiling %s. Keeps a broad query from saturating the MCP response.
+EmmcpSqlAuditHashOnly=Record only the query hash
+EmmcpSqlAuditHashOnlyDesc=A query's text can itself carry personal data in its WHERE clause. Enable this to store only the SHA-256 hash, which still keeps identical queries correlatable.
+EmmcpSqlAllowMultiEntity=Allow in a multi-company setup
+EmmcpSqlAllowMultiEntityDesc=Off by default. Raw SQL cannot be reliably filtered per entity: outside the main entity, access is refused unless you explicitly lift this guard.
+EmmcpSqlDbCredentials=Dedicated read-only MySQL account (required)
+EmmcpSqlDbMissing=No read-only account is configured: SQL access stays unavailable even if the switch above is on.
+EmmcpSqlDbIntro=SQL access requires a MySQL account separate from Dolibarr's own, granted SELECT only. Until one is configured, no query runs. Why: a read-only transaction blocks data writes but not DDL (CREATE, DROP, ALTER cause an implicit commit); only a SELECT-only account makes the server itself enforce read-only. That account must have no EXECUTE, no FILE, and no DML or DDL privilege.
+EmmcpSqlDbCredentialsHelp=Example account creation, adapt to your server.
+EmmcpSqlDbGrantExample=Example: CREATE USER 'dolibarr_ro'@'localhost' IDENTIFIED BY '…'; GRANT SELECT ON `your_database`.* TO 'dolibarr_ro'@'localhost';
+EmmcpSqlDbUser=MySQL user
+EmmcpSqlDbUserDesc=Required. Must differ from Dolibarr's application account; the connection is refused if the server authenticates as that account anyway.
+EmmcpSqlDbPassword=MySQL password
+EmmcpSqlDbPasswordDesc=Unchanged if left empty. The stored password is never displayed back on this page.
+EmmcpSqlDbPasswordSet=A password is stored (••••••••)
+EmmcpSqlDbPasswordNotSet=No password stored
+EmmcpSqlDbClearPassword=Clear the stored password
+EmmcpSqlUsers=Authorised users
+EmmcpSqlUsersWarning=Granting this access gives the user broad read access to the database, far beyond their usual Dolibarr business permissions: margins, salaries, every third party with no commercial restriction, and all tables not explicitly denied. Only grant it to people who are already, organisationally, entitled to read all of that data.
+EmmcpSqlDolibarrRight=Dolibarr right
+EmmcpSqlRightMissing=The "Run read-only SQL queries through MCP" right is not granted to this user (see the "Permissions" tab of their card).
+EmmcpSqlOptIn=Individual opt-in
+EmmcpSqlOptInHelp=The individual opt-in is not enough on its own: the Dolibarr right must also be granted from the "Permissions" tab of the user card, and the access must be enabled globally.
+EmmcpSqlEffectiveAccess=Effective access
+EmmcpSqlNoUsers=No active user.
+EmmcpSqlPermissionsUpdated=Authorisation updated.
+EmmcpSqlSettingsSaved=Settings saved.
+EmmcpSqlPolicy=Denied scope
+EmmcpSqlPolicyIntro=These items are refused by the MCP server policy, on top of the validation that only accepts SELECT and WITH. This list is read-only.
+EmmcpSqlPolicyUnavailable=The MCP server package was not found: the denied scope cannot be displayed.
+EmmcpSqlDeniedTables=Denied tables
+EmmcpSqlDeniedColumns=Denied columns
+EmmcpSqlDeniedFunctions=Denied functions
+EmmcpSqlDeniedColumnFragments=Refused column name fragments
+EmmcpSqlAuditTrail=Last 20 queries
+EmmcpSqlAuditTrailIntro=Query results are never stored: only metadata and, depending on the setting above, the truncated query text or its hash alone.
+EmmcpSqlAuditDuration=Duration
+EmmcpSqlAuditRows=Rows
+EmmcpSqlAuditSource=Source
+EmmcpSqlAuditSuccess=Query executed
+EmmcpSqlAuditQuery=Query
+EmmcpSqlAuditHashOnlyRow=Hash only:
+EmmcpSqlAuditEmpty=No query recorded.
+
 # About page
 EmmcpCompatibility=Compatibility
 EmmcpCapabilities=Capabilities

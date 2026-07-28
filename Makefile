@@ -29,10 +29,20 @@ RELEASE_FILENAME := module_$(MODULE_NAME)-$(VERSION).zip
 # Entrypoints that MUST be present in the built package (sanity check)
 CRITICAL_FILES := mcp.php oauth.php .htaccess \
 	core/modules/modEmmcp.class.php \
-	admin/setup.php lib/emmcp.lib.php \
+	admin/setup.php admin/sql_access.php lib/emmcp.lib.php \
 	sql/llx_emmcp_oauth_token.sql \
+	sql/llx_emmcp_sql_audit.sql \
+	sql/llx_emmcp_sql_permissions.sql \
+	class/emmcpmigrations.class.php \
+	class/emmcpsqlpermissions.class.php \
+	class/emmcpsqlgateway.class.php \
+	class/emmcpsqlaudit.class.php \
+	class/emmcpsqlcapability.class.php \
 	vendor/dolibarr-mcp-server/LLM.md \
 	vendor/dolibarr-mcp-server/vendor/autoload.php \
+	vendor/dolibarr-mcp-server/src/Sql/SqlReadOnlyValidator.php \
+	vendor/dolibarr-mcp-server/src/Tools/Gated/SqlTools.php \
+	vendor/dolibarr-mcp-server/vendor/greenlion/php-sql-parser/src/PHPSQLParser/PHPSQLParser.php \
 	lib/emmcp_bootstrap.php \
 	vendor/dolibarr-mcp-oauth/src/OAuthServer.php \
 	vendor/dolibarr-mcp-oauth/src/HttpEndpoint.php \
@@ -67,11 +77,48 @@ version:
 	@echo "$(VERSION)"
 
 lint:
-	@find admin core lib -name '*.php' -print0 | xargs -0 -n1 php -l >/dev/null
+	@find admin class core lib -name '*.php' -print0 | xargs -0 -n1 php -l >/dev/null
 	@php -l mcp.php >/dev/null && php -l oauth.php >/dev/null
 	@echo "$(GREEN)PHP syntax OK$(NC)"
 
-build-release:
+# Version of the sibling dolibarr-mcp-server checkout this module expects to
+# bundle. The build refuses to package anything else: the package is a separate
+# repository, so without this the ZIP silently carries whatever happens to be
+# checked out — a work-in-progress branch, or a stale tree.
+EXPECTED_RUNTIME_VERSION ?= 2.2.0
+
+# Set to the tag the runtime must be built from. Left empty, a clean working
+# tree at the expected version is accepted, which is what dev builds need. The
+# release target sets it, so a published ZIP can only come from a tagged commit.
+REQUIRED_RUNTIME_TAG ?=
+
+check-runtime:
+	@test -d "$(MCP_PACKAGE_SRC)" || (echo "$(RED)MCP package source not found: $(MCP_PACKAGE_SRC)$(NC)" && exit 1)
+	@actual=$$(grep -oE "setServerInfo\('Dolibarr MCP Server', '[^']+'" $(MCP_PACKAGE_SRC)/src/Bootstrap.php | grep -oE "'[0-9][^']*'$$" | tr -d "'"); \
+	if [ "$$actual" != "$(EXPECTED_RUNTIME_VERSION)" ]; then \
+		echo "$(RED)Runtime version mismatch: expected $(EXPECTED_RUNTIME_VERSION), found $$actual$(NC)"; \
+		echo "$(YELLOW)Point MCP_PACKAGE_SRC at the right checkout, or set EXPECTED_RUNTIME_VERSION.$(NC)"; \
+		exit 1; \
+	fi
+	@cd $(MCP_PACKAGE_SRC) && \
+	if [ -n "$$(git status --porcelain)" ]; then \
+		echo "$(RED)Runtime checkout is dirty; commit or stash before building.$(NC)"; \
+		git status --short; \
+		exit 1; \
+	fi
+	@if [ -n "$(REQUIRED_RUNTIME_TAG)" ]; then \
+		cd $(MCP_PACKAGE_SRC) && \
+		if ! git describe --exact-match --tags HEAD 2>/dev/null | grep -qx "$(REQUIRED_RUNTIME_TAG)"; then \
+			echo "$(RED)Runtime HEAD is not at tag $(REQUIRED_RUNTIME_TAG).$(NC)"; \
+			echo "$(YELLOW)Merge and tag the runtime first, then build from the tag.$(NC)"; \
+			exit 1; \
+		fi; \
+		echo "  runtime pinned to tag $(REQUIRED_RUNTIME_TAG)"; \
+	fi
+	@echo "  runtime $(EXPECTED_RUNTIME_VERSION) verified ($(MCP_PACKAGE_SRC))"
+.PHONY: check-runtime
+
+build-release: check-runtime
 	@echo "$(GREEN)Building emMCP v$(VERSION)...$(NC)"
 	@test -d "$(MCP_PACKAGE_SRC)" || (echo "$(RED)MCP package source not found: $(MCP_PACKAGE_SRC)$(NC)" && exit 1)
 	@rm -rf $(BUILD_DIR)
@@ -79,7 +126,7 @@ build-release:
 	@mkdir -p $(BUILD_DIR)/$(MODULE_NAME)
 
 	@echo "[1/7] Copying module files..."
-	@cp -r admin core lib sql langs $(BUILD_DIR)/$(MODULE_NAME)/
+	@cp -r admin class core lib sql langs $(BUILD_DIR)/$(MODULE_NAME)/
 	@cp mcp.php oauth.php README.md CHANGELOG.md .htaccess $(BUILD_DIR)/$(MODULE_NAME)/
 
 	@echo "[2/7] Bundling dolibarr-mcp-server package..."
@@ -101,7 +148,7 @@ build-release:
 	@echo "[5/7] Pruning dev cruft..."
 	@find $(BUILD_DIR)/$(MODULE_NAME) -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
 	@find $(BUILD_DIR)/$(MODULE_NAME) -type f \( -name ".gitignore" -o -name ".gitattributes" \) -delete 2>/dev/null || true
-	@find $(BUILD_DIR)/$(MODULE_NAME)/vendor -type d \( -name tests -o -name ".github" -o -name docs -o -name ".phan" \) -exec rm -rf {} + 2>/dev/null || true
+	@find $(BUILD_DIR)/$(MODULE_NAME)/vendor -type d \( -name tests -o -name ".github" -o -name docs -o -name ".phan" -o -name examples -o -name wiki -o -name ".settings" \) -exec rm -rf {} + 2>/dev/null || true
 	@find $(BUILD_DIR)/$(MODULE_NAME)/vendor -type f \( -name "phpunit.xml*" -o -name "phpstan.neon" -o -name ".editorconfig" -o -name "*.dist" \) -delete 2>/dev/null || true
 
 	@echo "[6/7] Verifying critical files are present..."
@@ -136,7 +183,15 @@ tag: check-git-clean
 	@git push origin "v$(VERSION)" 2>/dev/null || echo "$(YELLOW)No 'origin' remote — tag created locally only.$(NC)"
 	@echo "$(GREEN)Tag v$(VERSION) created.$(NC)"
 
-release: tag build-release
+# A published ZIP may only be built from a tagged runtime. Order of operations:
+#   1. merge + push the runtime, then tag it v$(EXPECTED_RUNTIME_VERSION)
+#   2. merge + push emMCP
+#   3. make release   (verifies the runtime tag, then tags and builds emMCP)
+#   4. make publish
+release: check-git-clean
+	@$(MAKE) REQUIRED_RUNTIME_TAG=v$(EXPECTED_RUNTIME_VERSION) check-runtime
+	@$(MAKE) tag
+	@$(MAKE) REQUIRED_RUNTIME_TAG=v$(EXPECTED_RUNTIME_VERSION) build-release
 	@echo "$(GREEN)Release v$(VERSION) complete.$(NC)"
 
 publish: ## Publish latest release to EMGateway

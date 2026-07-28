@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-28
+
+### Added
+- **Read-only SQL access for reporting.** Two new MCP tools, `dolibarr_sql_query`
+  and `dolibarr_sql_schema`, let a remote MCP agent inspect the database schema
+  and run reporting queries — `SELECT`, `WITH`/CTE, `JOIN`, subqueries,
+  aggregates and `UNION` — across core and third-party module tables.
+- New admin tab **SQL access** to enable the feature, set the limits (rows,
+  timeout, response size), grant it per user, and review the audit trail.
+- New Dolibarr right `emmcp -> sqlquery -> read`, granted to nobody by default.
+- Optional read-only database credentials (`EMMCP_SQL_DB_USER`,
+  `EMMCP_SQL_DB_PASSWORD`) so the server itself can enforce read-only access.
+- Audit trail in `llx_emmcp_sql_audit`: user, timestamp, query hash and
+  truncated text, duration, row count, outcome. Query *results* are never
+  stored, and `EMMCP_SQL_AUDIT_HASH_ONLY` reduces the record to its hash.
+
+### Security
+- **Disabled by default and off unless every condition holds**: the global flag
+  `EMMCP_SQL_ENABLED`, the Dolibarr right, an explicit per-user opt-in, and no
+  active multicompany module. Holding an API key is never sufficient.
+- When access is not granted the SQL tools are **not listed at all**, rather
+  than listed and refusing.
+- Queries go through a fail-closed lexer and a parse-tree validator: one
+  statement only; no writes or DDL; no locking reads (`FOR UPDATE`, `FOR SHARE`,
+  `LOCK IN SHARE MODE`); no executable comments (`/*! … */`, `/*M! … */`) nor
+  optimizer hints (`/*+ … */`), which the server honours while the parser drops
+  them; no credential columns anywhere in the tree, matched by exact name and by
+  fragment so `smtp_password` and `access_token` are caught as well as `api_key`;
+  no `SELECT *` on any table, `COUNT(*)` excepted; no `SLEEP`/`BENCHMARK`/
+  `LOAD_FILE`/lock functions.
+- **Queries are confined to the current database**: a name qualified by a
+  database (`other_db.llx_societe`) is refused, so an instance sharing a MySQL
+  server with other Dolibarr installs cannot read them.
+- Auth, session and configuration tables (`llx_const`, `llx_session`,
+  `llx_emmcp_oauth_*`, `llx_oauth_token`) are unreachable, as are the system
+  databases.
+- Execution runs on a dedicated connection inside a read-only transaction, with
+  a normalised `sql_mode` and a statement timeout — both verified, and a failure
+  to apply either aborts rather than degrades — plus server-imposed row and byte
+  caps. Database errors are never relayed verbatim to the model.
+- Dependency update: `guzzlehttp/guzzle` raised to 7.15.2 in the embedded MCP
+  package, clearing four security advisories.
+
+### Upgrade notes
+- The new tables and the new right are created automatically on the first call
+  after the files are uploaded — no disable/enable cycle needed.
+- The feature stays **off** after upgrading. An administrator must enable it and
+  grant it per user. Note that being an administrator does not by itself grant
+  the right.
+
 ## [1.1.0] - 2026-07-16
 
 ### Changed
