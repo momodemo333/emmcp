@@ -99,6 +99,15 @@ $permissions = new EmmcpSqlPermissions($db, $conf);
 
 // Remember the starting state so the instance is left as it was found.
 $initialFlag = getDolGlobalInt('EMMCP_SQL_ENABLED');
+// Presence as well as value: the flag is off by default and may simply not
+// exist, in which case restoring it as "0" leaves a row the instance did not
+// have — and a constant row reads as configured to anyone auditing later.
+$initialFlagSet = false;
+$resql = $db->query(
+	"SELECT rowid FROM ".MAIN_DB_PREFIX."const"
+	." WHERE name = 'EMMCP_SQL_ENABLED' AND entity = ".((int) $conf->entity)
+);
+$initialFlagSet = ($resql && $db->num_rows($resql) > 0);
 $initialOptIn = $permissions->hasUserOptIn(1);
 $initialDbUser = getDolGlobalString('EMMCP_SQL_DB_USER');
 $initialDbPass = getDolGlobalString('EMMCP_SQL_DB_PASSWORD');
@@ -132,7 +141,7 @@ function emmcpFlowCleanup()
 {
 	global $db, $conf, $roUser, $initialFlag, $initialOptIn, $initialDbUser, $initialDbPass;
 	global $auditSource, $grantedForTest, $rightId, $createdDbUser;
-	global $initialDbUserSet, $initialDbPassSet, $initialOptInRowExisted;
+	global $initialDbUserSet, $initialDbPassSet, $initialOptInRowExisted, $initialFlagSet;
 
 	static $done = false;
 	if ($done) {
@@ -157,7 +166,11 @@ function emmcpFlowCleanup()
 		dolibarr_del_const($db, 'EMMCP_SQL_DB_PASSWORD', $conf->entity);
 	}
 
-	dolibarr_set_const($db, 'EMMCP_SQL_ENABLED', (string) $initialFlag, 'chaine', 0, '', $conf->entity);
+	if ($initialFlagSet) {
+		dolibarr_set_const($db, 'EMMCP_SQL_ENABLED', (string) $initialFlag, 'chaine', 0, '', $conf->entity);
+	} else {
+		dolibarr_del_const($db, 'EMMCP_SQL_ENABLED', $conf->entity);
+	}
 
 	dol_include_once('/emmcp/class/emmcpsqlpermissions.class.php');
 	if ($initialOptInRowExisted) {
@@ -212,6 +225,10 @@ function emmcpFlowInspectState()
 			." WHERE source = '".$db->escape($GLOBALS['auditSource'])."'"
 		),
 		'dbuser_const' => getDolGlobalString('EMMCP_SQL_DB_USER'),
+		'flag_row_exists' => (bool) $one(
+			"SELECT COUNT(*) AS n FROM ".MAIN_DB_PREFIX."const"
+			." WHERE name = 'EMMCP_SQL_ENABLED' AND entity = ".((int) $GLOBALS['conf']->entity)
+		),
 	);
 }
 
@@ -419,6 +436,7 @@ emmcpFlowCleanup();
 $state = emmcpFlowInspectState();
 
 check('SQL access is disabled again', (int) $state['flag'] === (int) $initialFlag, (string) $state['flag']);
+check('flag constant restored to its initial presence', $state['flag_row_exists'] === $initialFlagSet, var_export($state['flag_row_exists'], true));
 check('no opt-in left behind', $state['optins'] === 0, (string) $state['optins']);
 check('temporary right revoked', $state['rights'] === 0, (string) $state['rights']);
 check('test account removed', $state['dbusers'] === 0, (string) $state['dbusers']);

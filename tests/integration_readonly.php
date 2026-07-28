@@ -88,44 +88,37 @@ if (file_exists($autoload)) {
 }
 check('MCP package autoloader available', class_exists('\\DolibarrMcp\\Sql\\GrantInspector'));
 
-print "== Migrations ==\n";
-dol_include_once('/emmcp/class/emmcpmigrations.class.php');
-$migrations = new EmmcpMigrations($db);
-$ran = $migrations->run();
-check('migrations run without error', $ran, implode(' | ', $migrations->getErrors()));
+// --- State capture and cleanup registration, before ANY mutation ------------
+//
+// Everything below this point may change the instance, so the undo path is
+// installed first. Registering it later left a window in which an exception
+// would strand the schema version, an account or a constant.
 
-// Compared with version_compare, not equality: a database left at a *newer*
-// version (a downgrade, a botched rollback) must be neither rewritten
-// backwards nor re-migrated on every single request.
-check('schema is not behind the code', !$migrations->isUpgradeNeeded(), $migrations->getStoredVersion());
-
-$storedBefore = $migrations->getStoredVersion();
-$db->query("UPDATE ".MAIN_DB_PREFIX."const SET value = '9.9.9' WHERE name = '".EmmcpMigrations::VERSION_CONSTANT."'");
-$ahead = new EmmcpMigrations($db);
-check('a newer stored version is not treated as an upgrade', !$ahead->isUpgradeNeeded(), $ahead->getStoredVersion());
-$ahead->run();
-check('a newer stored version is never rolled back', $ahead->getStoredVersion() === '9.9.9', $ahead->getStoredVersion());
-$db->query(
-	"UPDATE ".MAIN_DB_PREFIX."const SET value = '".$db->escape($storedBefore)."'"
-	." WHERE name = '".EmmcpMigrations::VERSION_CONSTANT."'"
-);
-check('schema version restored', (new EmmcpMigrations($db))->getStoredVersion() === $storedBefore);
-
-foreach (array('emmcp_sql_permissions', 'emmcp_sql_audit') as $table) {
-	$resql = $db->query("SHOW TABLES LIKE '".MAIN_DB_PREFIX.$table."'");
-	check('table '.MAIN_DB_PREFIX.$table.' exists', $resql && $db->num_rows($resql) === 1);
-}
-
-print "\n== Gateway: dedicated account is mandatory ==\n";
-dol_include_once('/emmcp/class/emmcpsqlgateway.class.php');
 require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';
+dol_include_once('/emmcp/class/emmcpmigrations.class.php');
 
-// Whether the constants existed at all, not just their value: restoring a
+// Whether each constant existed at all, not just its value: restoring a
 // missing constant as an empty string leaves a row that was not there before.
-$initialDbUserSet = (getDolGlobalString('EMMCP_SQL_DB_USER') !== '');
-$initialDbPassSet = (getDolGlobalString('EMMCP_SQL_DB_PASSWORD') !== '');
 $initialDbUser = getDolGlobalString('EMMCP_SQL_DB_USER');
 $initialDbPass = getDolGlobalString('EMMCP_SQL_DB_PASSWORD');
+$initialDbUserSet = ($initialDbUser !== '');
+$initialDbPassSet = ($initialDbPass !== '');
+
+// The schema version is mutated by the downgrade check further down.
+$initialSchemaVersion = '';
+$initialSchemaVersionSet = false;
+$resql = $db->query(
+    "SELECT value FROM ".MAIN_DB_PREFIX."const"
+    ." WHERE name = '".$db->escape(EmmcpMigrations::VERSION_CONSTANT)."'"
+    ." AND entity = ".((int) $conf->entity)
+);
+if ($resql) {
+    $obj = $db->fetch_object($resql);
+    if ($obj) {
+        $initialSchemaVersion = (string) $obj->value;
+        $initialSchemaVersionSet = true;
+    }
+}
 
 // Accounts this run actually created. Only these are dropped: a fixed name
 // plus CREATE IF NOT EXISTS would silently adopt — and then delete — a
@@ -159,10 +152,11 @@ function makeTestAccount($prefix, $grant)
 }
 
 /**
- * Undo everything this run created, whatever happens.
+ * Undo everything this run created or changed, whatever happens.
  *
  * Registered as a shutdown function so an exception, a fatal or an early exit
- * cannot leave database accounts, probe tables or altered constants behind.
+ * cannot leave database accounts, probe tables, an altered schema version or
+ * altered constants behind.
  *
  * @return void
  */
@@ -170,6 +164,7 @@ function emmcpReadonlyCleanup()
 {
     global $db, $conf, $createdDbUsers, $createdProbeTables;
     global $initialDbUser, $initialDbPass, $initialDbUserSet, $initialDbPassSet;
+    global $initialSchemaVersion, $initialSchemaVersionSet;
 
     static $done = false;
     if ($done) {
@@ -200,9 +195,50 @@ function emmcpReadonlyCleanup()
     } else {
         dolibarr_del_const($db, 'EMMCP_SQL_DB_PASSWORD', $conf->entity);
     }
+
+    if ($initialSchemaVersionSet) {
+        $db->query(
+            "UPDATE ".MAIN_DB_PREFIX."const SET value = '".$db->escape($initialSchemaVersion)."'"
+            ." WHERE name = '".$db->escape(EmmcpMigrations::VERSION_CONSTANT)."'"
+            ." AND entity = ".((int) $conf->entity)
+        );
+    } else {
+        dolibarr_del_const($db, EmmcpMigrations::VERSION_CONSTANT, $conf->entity);
+    }
 }
 
 register_shutdown_function('emmcpReadonlyCleanup');
+
+print "== Migrations ==\n";
+dol_include_once('/emmcp/class/emmcpmigrations.class.php');
+$migrations = new EmmcpMigrations($db);
+$ran = $migrations->run();
+check('migrations run without error', $ran, implode(' | ', $migrations->getErrors()));
+
+// Compared with version_compare, not equality: a database left at a *newer*
+// version (a downgrade, a botched rollback) must be neither rewritten
+// backwards nor re-migrated on every single request.
+check('schema is not behind the code', !$migrations->isUpgradeNeeded(), $migrations->getStoredVersion());
+
+$storedBefore = $migrations->getStoredVersion();
+$db->query("UPDATE ".MAIN_DB_PREFIX."const SET value = '9.9.9' WHERE name = '".EmmcpMigrations::VERSION_CONSTANT."'");
+$ahead = new EmmcpMigrations($db);
+check('a newer stored version is not treated as an upgrade', !$ahead->isUpgradeNeeded(), $ahead->getStoredVersion());
+$ahead->run();
+check('a newer stored version is never rolled back', $ahead->getStoredVersion() === '9.9.9', $ahead->getStoredVersion());
+$db->query(
+	"UPDATE ".MAIN_DB_PREFIX."const SET value = '".$db->escape($storedBefore)."'"
+	." WHERE name = '".EmmcpMigrations::VERSION_CONSTANT."'"
+);
+check('schema version restored', (new EmmcpMigrations($db))->getStoredVersion() === $storedBefore);
+
+foreach (array('emmcp_sql_permissions', 'emmcp_sql_audit') as $table) {
+	$resql = $db->query("SHOW TABLES LIKE '".MAIN_DB_PREFIX.$table."'");
+	check('table '.MAIN_DB_PREFIX.$table.' exists', $resql && $db->num_rows($resql) === 1);
+}
+
+print "\n== Gateway: dedicated account is mandatory ==\n";
+dol_include_once('/emmcp/class/emmcpsqlgateway.class.php');
 
 // No dedicated account configured: the feature must simply not run. Falling
 // back to Dolibarr's own account would give a "read-only" feature full DML and

@@ -60,27 +60,57 @@ class EmmcpMigrations
 	 * Run pending migrations if the stored schema version is behind the code.
 	 *
 	 * Called on every entry point, so it must be cheap when there is nothing to
-	 * do: a single constant read, then a static guard for the rest of the
+	 * do: a single constant read, then the cached outcome for the rest of the
 	 * request.
+	 *
+	 * What is cached is the *result*, not the fact that an attempt was made.
+	 * Flagging "done" before knowing the outcome meant a second call in the
+	 * same request reported success after a failed migration — and the callers
+	 * act on this: mcp.php would have served requests against the broken schema
+	 * it had just refused, and the admin page would have re-enabled the actions
+	 * it had just disabled.
 	 *
 	 * @param  DoliDB $db Database handler
 	 * @return bool       True when the schema is up to date
 	 */
 	public static function runIfNeeded($db)
 	{
-		static $done = false;
-		if ($done) {
-			return true;
+		if (self::$cachedResult !== null) {
+			return self::$cachedResult;
 		}
-		$done = true;
 
 		$migrations = new self($db);
 		if (!$migrations->isUpgradeNeeded()) {
-			return true;
+			self::$cachedResult = true;
+
+			return self::$cachedResult;
 		}
 
-		return $migrations->run();
+		self::$cachedResult = $migrations->run();
+
+		return self::$cachedResult;
 	}
+
+	/**
+	 * Clear the per-request cache of runIfNeeded().
+	 *
+	 * Only for tests, which need to exercise the caching itself; nothing in the
+	 * module calls it. A request otherwise resolves the schema state once.
+	 *
+	 * @return void
+	 */
+	public static function resetRuntimeCacheForTesting()
+	{
+		self::$cachedResult = null;
+	}
+
+	/**
+	 * Outcome of runIfNeeded() for this request: null until decided, then the
+	 * real result — including false, which must stay false.
+	 *
+	 * @var bool|null
+	 */
+	private static $cachedResult = null;
 
 	/**
 	 * Replay every migration. They are idempotent, so this is safe to call at
