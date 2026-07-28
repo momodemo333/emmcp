@@ -89,8 +89,14 @@ EXPECTED_RUNTIME_VERSION ?= 2.2.0
 
 # Same for the shared OAuth library: it is a third separate repository, and the
 # build would otherwise bundle whatever is checked out beside it.
+#
+# Unlike the runtime, this one is pinned even for a dev build: there is no
+# feature branch in flight here, so "clean tree at the right version" would
+# still accept an arbitrary commit that merely happens to be clean. HEAD must
+# be the tag itself. Set EXPECTED_OAUTH_COMMIT to accept a specific untagged
+# commit instead — explicitly, never by default.
 EXPECTED_OAUTH_VERSION ?= 1.0.0
-REQUIRED_OAUTH_TAG ?=
+EXPECTED_OAUTH_COMMIT ?=
 
 # Fixed timestamp for every entry in the ZIP. Any constant works; what matters
 # is that it does not change between builds of the same sources.
@@ -142,19 +148,22 @@ check-oauth:
 		exit 1; \
 	fi
 	@cd $(LIB_OAUTH_SRC) && \
-	if ! git tag --list "v$(EXPECTED_OAUTH_VERSION)" | grep -qx "v$(EXPECTED_OAUTH_VERSION)"; then \
-		echo "$(RED)dolibarr-mcp-oauth has no tag v$(EXPECTED_OAUTH_VERSION).$(NC)"; \
-		exit 1; \
-	fi
-	@if [ -n "$(REQUIRED_OAUTH_TAG)" ]; then \
-		cd $(LIB_OAUTH_SRC) && \
-		if ! git describe --exact-match --tags HEAD 2>/dev/null | grep -qx "$(REQUIRED_OAUTH_TAG)"; then \
-			echo "$(RED)dolibarr-mcp-oauth HEAD is not at tag $(REQUIRED_OAUTH_TAG).$(NC)"; \
+	if [ -n "$(EXPECTED_OAUTH_COMMIT)" ]; then \
+		head=$$(git rev-parse HEAD); \
+		if [ "$$head" != "$(EXPECTED_OAUTH_COMMIT)" ]; then \
+			echo "$(RED)dolibarr-mcp-oauth HEAD is not the expected commit.$(NC)"; \
+			echo "$(YELLOW)expected $(EXPECTED_OAUTH_COMMIT), found $$head$(NC)"; \
 			exit 1; \
 		fi; \
-		echo "  oauth library pinned to tag $(REQUIRED_OAUTH_TAG)"; \
+		echo "  oauth library pinned to commit $(EXPECTED_OAUTH_COMMIT)"; \
+	else \
+		if ! git describe --exact-match --tags HEAD 2>/dev/null | grep -qx "v$(EXPECTED_OAUTH_VERSION)"; then \
+			echo "$(RED)dolibarr-mcp-oauth HEAD is not at tag v$(EXPECTED_OAUTH_VERSION).$(NC)"; \
+			echo "$(YELLOW)Check out that tag, or set EXPECTED_OAUTH_COMMIT to accept another commit.$(NC)"; \
+			exit 1; \
+		fi; \
+		echo "  oauth library v$(EXPECTED_OAUTH_VERSION) verified at its tag ($(LIB_OAUTH_SRC))"; \
 	fi
-	@echo "  oauth library $(EXPECTED_OAUTH_VERSION) verified ($(LIB_OAUTH_SRC))"
 .PHONY: check-oauth
 
 build-release: check-runtime check-oauth
@@ -250,15 +259,37 @@ tag: check-git-clean
 # Expected versions: runtime $(EXPECTED_RUNTIME_VERSION), oauth library
 # $(EXPECTED_OAUTH_VERSION). Order of operations:
 #   1. merge + push dolibarr-mcp-server, then tag it v$(EXPECTED_RUNTIME_VERSION)
-#   2. ensure dolibarr-mcp-oauth is at tag v$(EXPECTED_OAUTH_VERSION)
+#   2. check out dolibarr-mcp-oauth at its tag v$(EXPECTED_OAUTH_VERSION)
 #   3. merge + push emMCP
-#   4. make release   (verifies both tags, then tags and builds emMCP)
+#   4. make release   (checks both deps, builds and verifies, and only then
+#                      tags emMCP and rebuilds from the tag)
 #   5. make publish
 release: check-git-clean
+# Nothing is tagged or pushed until a verified build exists. `tag` pushes to
+# origin, so tagging first meant a failed or non-reproducible build could leave
+# a published release tag pointing at something that never shipped — and a
+# pushed tag is the one step here that cannot be quietly undone.
+	@echo "$(GREEN)[1/4] Verifying pinned dependencies...$(NC)"
 	@$(MAKE) REQUIRED_RUNTIME_TAG=v$(EXPECTED_RUNTIME_VERSION) check-runtime
-	@$(MAKE) REQUIRED_OAUTH_TAG=v$(EXPECTED_OAUTH_VERSION) check-oauth
+	@$(MAKE) check-oauth
+
+	@echo "$(GREEN)[2/4] Building and proving reproducibility...$(NC)"
+	@$(MAKE) REQUIRED_RUNTIME_TAG=v$(EXPECTED_RUNTIME_VERSION) verify-reproducible
+	@cp $(RELEASE_DIR)/$(RELEASE_FILENAME) $(RELEASE_DIR)/.pre-tag.zip
+
+	@echo "$(GREEN)[3/4] Tagging emMCP...$(NC)"
 	@$(MAKE) tag
-	@$(MAKE) REQUIRED_RUNTIME_TAG=v$(EXPECTED_RUNTIME_VERSION) REQUIRED_OAUTH_TAG=v$(EXPECTED_OAUTH_VERSION) build-release
+
+	@echo "$(GREEN)[4/4] Rebuilding from the tagged tree...$(NC)"
+	@$(MAKE) REQUIRED_RUNTIME_TAG=v$(EXPECTED_RUNTIME_VERSION) build-release
+	@if cmp -s $(RELEASE_DIR)/.pre-tag.zip $(RELEASE_DIR)/$(RELEASE_FILENAME); then \
+		echo "  the tagged tree produces the byte-identical ZIP"; \
+		rm -f $(RELEASE_DIR)/.pre-tag.zip; \
+	else \
+		echo "$(RED)The tagged tree produced a different ZIP.$(NC)"; \
+		rm -f $(RELEASE_DIR)/.pre-tag.zip; \
+		exit 1; \
+	fi
 	@echo "$(GREEN)Release v$(VERSION) complete.$(NC)"
 
 publish: ## Publish latest release to EMGateway
