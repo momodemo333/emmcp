@@ -94,6 +94,12 @@ REQUIRED_OAUTH_TAG ?=
 
 # Fixed timestamp for every entry in the ZIP. Any constant works; what matters
 # is that it does not change between builds of the same sources.
+#
+# Note that the checksum legitimately changes when the embedded runtime is
+# re-committed: Composer records the package's git HEAD in
+# vendor/composer/installed.php, so the ZIP identifies the exact runtime it
+# carries. Reproducibility here means "same sources, same checksum", which is
+# what makes the checksum worth publishing.
 SOURCE_DATE_EPOCH ?= 1700000000
 
 # Set to the tag the runtime must be built from. Left empty, a clean working
@@ -208,6 +214,22 @@ build-release: check-runtime check-oauth
 	@echo "$(GREEN)Release built:$(NC)"
 	@ls -lh $(RELEASE_DIR)/$(RELEASE_FILENAME)
 	@cat $(RELEASE_DIR)/$(RELEASE_FILENAME).sha256
+
+# Builds twice into a scratch copy and compares. Kept as a target so the claim
+# can be re-checked on any machine rather than taken on trust.
+verify-reproducible:
+	@$(MAKE) build-release >/dev/null
+	@cp $(RELEASE_DIR)/$(RELEASE_FILENAME) $(RELEASE_DIR)/.repro-check.zip
+	@$(MAKE) build-release >/dev/null
+	@if cmp -s $(RELEASE_DIR)/.repro-check.zip $(RELEASE_DIR)/$(RELEASE_FILENAME); then \
+		echo "$(GREEN)Reproducible: two builds are byte-identical.$(NC)"; \
+		rm -f $(RELEASE_DIR)/.repro-check.zip; \
+	else \
+		echo "$(RED)Not reproducible: the two builds differ.$(NC)"; \
+		rm -f $(RELEASE_DIR)/.repro-check.zip; \
+		exit 1; \
+	fi
+.PHONY: verify-reproducible
 
 check-git-clean:
 	@if [ -n "$$(git status --porcelain)" ]; then \
