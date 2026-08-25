@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.3.0] - 2026-08-25
+
+### Changed
+- **No more dedicated MySQL account.** Read-only SQL access ran on a separate
+  SELECT-only database account, which had to be created by hand and whose
+  grants were verified at every connection. In practice that requirement meant
+  the feature stayed switched off: nobody creates a second account, and those
+  who try tend to reuse the Dolibarr one, which the module then refused.
+  Queries now run on Dolibarr's own credentials — on a separate mysqli session,
+  so the statement timeout, the SQL mode and the read-only transaction never
+  leak into the application connection. The *Dedicated MySQL account* section
+  has been removed from the admin tab, along with the `EMMCP_SQL_DB_USER` and
+  `EMMCP_SQL_DB_PASSWORD` settings.
+- **The guarantee is now entirely in software.** A READ ONLY transaction stops
+  INSERT/UPDATE/DELETE but not DDL, so the server no longer enforces read-only
+  on its own. What does: a lexer that refuses multi-statement text and
+  executable comments, a real SQL parser with a whitelist of clauses, a policy
+  over every table, column and function, and a final check that the statement
+  starts with SELECT or WITH. A dedicated hardening suite of ~80 payloads (DDL
+  in every form, statement smuggling, executable comments, INTO OUTFILE,
+  locking reads, write keywords hidden in literals) must stay refused, and a
+  matching set of complex legitimate queries — UNION, CTE, nested subqueries,
+  aggregates — must stay accepted.
+- **The admin tab is now named "MCP SQL access"**, and states plainly that
+  queries use the Dolibarr connection and what stops a write.
+
+### Added
+- The SQL layer moved to the shared `dolibarr-mcp-sql` library, so emMCP and
+  Dalfred run the exact same code. A fix on one benefits the other. Each module
+  keeps its own tables, constants and Dolibarr right, so both can be installed
+  side by side on a single instance.
+
 All notable changes to the emMCP module will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),

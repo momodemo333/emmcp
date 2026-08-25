@@ -116,18 +116,24 @@ function emmcp_error($httpCode, $rpcCode, $message)
  * Deny-by-default is structural rather than a runtime check to remember.
  *
  * Must be called only after the dolibarr-mcp-server autoloader is required —
- * EmmcpSqlCapability implements one of that package's interfaces.
+ * DolibarrMcpSql\SqlCapability implements one of that package's interfaces.
  *
  * @param  DoliDB $db     Database handler
  * @param  Conf   $conf   Dolibarr configuration
  * @param  string $apiKey Caller's validated API key
- * @return EmmcpSqlCapability|null
+ * @return \DolibarrMcpSql\SqlCapability|null
  */
 function emmcpBuildSqlCapability($db, $conf, $apiKey)
 {
-	dol_include_once('/emmcp/class/emmcpsqlpermissions.class.php');
+	dol_include_once('/emmcp/lib/emmcp_bootstrap.php');
+	if (emmcp_mcp_sql_autoload() === null) {
+		dol_syslog('[EMMCP] dolibarr-mcp-sql library not found; SQL tools stay hidden', LOG_WARNING);
 
-	$permissions = new EmmcpSqlPermissions($db, $conf);
+		return null;
+	}
+
+	$config = emmcp_sql_config();
+	$permissions = new \DolibarrMcpSql\SqlPermissions($db, $conf, $config);
 
 	// Cheapest gate first: skip loading a User object on the overwhelmingly
 	// common path where the feature is simply off.
@@ -153,11 +159,7 @@ function emmcpBuildSqlCapability($db, $conf, $apiKey)
 		return null;
 	}
 
-	dol_include_once('/emmcp/class/emmcpsqlgateway.class.php');
-	dol_include_once('/emmcp/class/emmcpsqlaudit.class.php');
-	dol_include_once('/emmcp/class/emmcpsqlcapability.class.php');
-
-	return new EmmcpSqlCapability($db, $conf, $mcpUser, 'mcp');
+	return new \DolibarrMcpSql\SqlCapability($db, $conf, $mcpUser, $config, 'mcp');
 }
 
 /**

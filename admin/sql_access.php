@@ -41,7 +41,8 @@ require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';
 require_once DOL_DOCUMENT_ROOT.'/user/class/user.class.php';
 dol_include_once('/emmcp/lib/emmcp.lib.php');
 dol_include_once('/emmcp/class/emmcpmigrations.class.php');
-dol_include_once('/emmcp/class/emmcpsqlpermissions.class.php');
+dol_include_once('/emmcp/lib/emmcp_bootstrap.php');
+emmcp_mcp_sql_autoload();
 
 $langs->loadLangs(array('admin', 'users', 'other', 'emmcp@emmcp'));
 
@@ -58,7 +59,7 @@ if (!$user->admin) {
 // against a stale schema produces confusing half-failures.
 $schemaReady = EmmcpMigrations::runIfNeeded($db);
 
-$permissions = new EmmcpSqlPermissions($db, $conf);
+$permissions = new \DolibarrMcpSql\SqlPermissions($db, $conf, emmcp_sql_config());
 
 $action = GETPOST('action', 'aZ09');
 $userid = GETPOST('userid', 'int');
@@ -128,27 +129,6 @@ if ($action === 'update_limits') {
 	exit;
 }
 
-if ($action === 'update_dbcreds') {
-	$dbUser = GETPOST('EMMCP_SQL_DB_USER', 'alphanohtml');
-	$dbPassword = GETPOST('EMMCP_SQL_DB_PASSWORD', 'password');
-	$clearPassword = GETPOST('clearpassword', 'int') ? 1 : 0;
-
-	dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', trim((string) $dbUser), 'chaine', 0, 'emMCP read-only SQL: dedicated MySQL account', $conf->entity);
-
-	if ($clearPassword) {
-		dolibarr_del_const($db, 'EMMCP_SQL_DB_PASSWORD', $conf->entity);
-	} elseif ((string) $dbPassword !== '') {
-		// Never overwritten with an empty value: an empty field means "keep the
-		// stored password", so that the page never has to display it back.
-		// The name ends with _PASSWORD, so dolibarr_set_const() encrypts it.
-		dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', (string) $dbPassword, 'chaine', 0, 'emMCP read-only SQL: dedicated MySQL account password', $conf->entity);
-	}
-
-	setEventMessages($langs->trans('EmmcpSqlSettingsSaved'), null, 'mesgs');
-	header('Location: '.$_SERVER['PHP_SELF']);
-	exit;
-}
-
 if ($action === 'update_permissions' && $userid > 0) {
 	$enabled = GETPOST('sql_enabled_'.$userid, 'int') ? true : false;
 
@@ -169,8 +149,6 @@ $globallyEnabled = $permissions->isGloballyEnabled();
 $maxRows = getDolGlobalInt('EMMCP_SQL_MAX_ROWS') ?: 200;
 $timeout = getDolGlobalInt('EMMCP_SQL_TIMEOUT') ?: 5;
 $maxBytes = getDolGlobalInt('EMMCP_SQL_MAX_BYTES') ?: 262144;
-$dbUser = getDolGlobalString('EMMCP_SQL_DB_USER');
-$dbPasswordSet = (getDolGlobalString('EMMCP_SQL_DB_PASSWORD') !== '');
 
 llxHeader('', $langs->trans('EmmcpSqlAccess'));
 
@@ -180,7 +158,7 @@ print load_fiche_titre($langs->trans('EmmcpSetup'), $linkback, 'title_setup');
 $head = emmcpAdminPrepareHead();
 print dol_get_fiche_head($head, 'sqlaccess', $langs->trans('EmmcpName'), -1, 'technic');
 
-print '<span class="opacitymedium">'.$langs->trans('EmmcpSqlAccessIntro').'</span><br><br>';
+print '<span class="opacitymedium">'.$langs->trans('EmmcpSqlAccessIntro').'<br><br>'.$langs->trans('EmmcpSqlAccessConnection').'</span><br><br>';
 
 if (!$schemaReady) {
 	print '<div class="error" style="padding:12px;margin:10px 0;">';
@@ -263,58 +241,7 @@ print '</div>';
 print '<br>';
 
 // ---------------------------------------------------------------------------
-// Section 3 — optional dedicated MySQL account
-// ---------------------------------------------------------------------------
-
-print load_fiche_titre($langs->trans('EmmcpSqlDbCredentials'), '', '');
-
-print '<div class="info">'.$langs->trans('EmmcpSqlDbIntro').'<br><br>'.$langs->trans('EmmcpSqlDbGrantsChecked').'</div>';
-
-// Without this account nothing runs, so say so where an administrator will
-// look rather than leaving them to discover it through a refused query.
-if (getDolGlobalString('EMMCP_SQL_DB_USER') === '') {
-	print '<div class="warning" style="padding:10px;margin:10px 0;border:2px solid #ff6b6b;background-color:#ffe0e0;border-radius:5px;">';
-	print dol_escape_htmltag($langs->trans('EmmcpSqlDbMissing'));
-	print '</div>';
-}
-
-print '<div class="opacitymedium small" style="padding:6px 0 10px;">'.$langs->trans('EmmcpSqlDbCredentialsHelp').' '.$langs->trans('EmmcpSqlDbGrantExample').'</div>';
-
-print '<form method="POST" action="'.$_SERVER['PHP_SELF'].'" autocomplete="off">';
-print '<input type="hidden" name="token" value="'.newToken().'">';
-print '<input type="hidden" name="action" value="update_dbcreds">';
-
-print '<div class="div-table-responsive-no-min">';
-print '<table class="noborder centpercent">';
-print '<tr class="liste_titre"><td>'.$langs->trans('Parameter').'</td><td>'.$langs->trans('Value').'</td></tr>';
-
-print '<tr class="oddeven"><td class="titlefield">'.$langs->trans('EmmcpSqlDbUser');
-print '<br><span class="opacitymedium small">'.$langs->trans('EmmcpSqlDbUserDesc').'</span></td>';
-print '<td><input type="text" class="minwidth200" name="EMMCP_SQL_DB_USER" value="'.dol_escape_htmltag($dbUser).'" autocomplete="off"></td></tr>';
-
-print '<tr class="oddeven"><td>'.$langs->trans('EmmcpSqlDbPassword');
-print '<br><span class="opacitymedium small">'.$langs->trans('EmmcpSqlDbPasswordDesc').'</span></td>';
-print '<td>';
-// The stored password is never rendered, not even masked with its real length.
-print '<input type="password" class="minwidth200" name="EMMCP_SQL_DB_PASSWORD" value="" autocomplete="new-password">';
-print ' <span class="opacitymedium small">'.($dbPasswordSet ? $langs->trans('EmmcpSqlDbPasswordSet') : $langs->trans('EmmcpSqlDbPasswordNotSet')).'</span>';
-if ($dbPasswordSet) {
-	print '<br><label><input type="checkbox" name="clearpassword" value="1"> '.$langs->trans('EmmcpSqlDbClearPassword').'</label>';
-}
-print '</td></tr>';
-
-print '<tr class="oddeven"><td colspan="2" class="center">';
-print '<input type="submit" class="button button-save" value="'.$langs->trans('Save').'">';
-print '</td></tr>';
-
-print '</table>';
-print '</div>';
-print '</form>';
-
-print '<br>';
-
-// ---------------------------------------------------------------------------
-// Section 4 — per-user opt-in
+// Section 3 — per-user opt-in
 // ---------------------------------------------------------------------------
 
 print load_fiche_titre($langs->trans('EmmcpSqlUsers'), '', '');

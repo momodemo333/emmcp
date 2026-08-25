@@ -84,10 +84,8 @@ if (!file_exists($autoload)) {
 require_once $autoload;
 
 dol_include_once('/emmcp/class/emmcpmigrations.class.php');
-dol_include_once('/emmcp/class/emmcpsqlpermissions.class.php');
-dol_include_once('/emmcp/class/emmcpsqlgateway.class.php');
-dol_include_once('/emmcp/class/emmcpsqlaudit.class.php');
-dol_include_once('/emmcp/class/emmcpsqlcapability.class.php');
+dol_include_once('/emmcp/lib/emmcp_bootstrap.php');
+emmcp_mcp_sql_autoload();
 
 EmmcpMigrations::runIfNeeded($db);
 
@@ -95,7 +93,7 @@ $testUser = new User($db);
 $testUser->fetch(1);
 $testUser->getrights();
 
-$permissions = new EmmcpSqlPermissions($db, $conf);
+$permissions = new \DolibarrMcpSql\SqlPermissions($db, $conf, emmcp_sql_config());
 
 // Remember the starting state so the instance is left as it was found.
 $initialFlag = getDolGlobalInt('EMMCP_SQL_ENABLED');
@@ -172,9 +170,10 @@ function emmcpFlowCleanup()
 		dolibarr_del_const($db, 'EMMCP_SQL_ENABLED', $conf->entity);
 	}
 
-	dol_include_once('/emmcp/class/emmcpsqlpermissions.class.php');
+	dol_include_once('/emmcp/lib/emmcp_bootstrap.php');
+	emmcp_mcp_sql_autoload();
 	if ($initialOptInRowExisted) {
-		(new EmmcpSqlPermissions($db, $conf))->setUserOptIn(1, $initialOptIn, 1);
+		(new \DolibarrMcpSql\SqlPermissions($db, $conf, emmcp_sql_config()))->setUserOptIn(1, $initialOptIn, 1);
 	} else {
 		// There was no row before; leave none behind.
 		$db->query(
@@ -310,14 +309,14 @@ print "\n== Flag on, user not opted in ==\n";
 dolibarr_set_const($db, 'EMMCP_SQL_ENABLED', '1', 'chaine', 0, '', $conf->entity);
 $conf->global->EMMCP_SQL_ENABLED = '1';
 $permissions->setUserOptIn(1, false, 1);
-$permissions = new EmmcpSqlPermissions($db, $conf);
+$permissions = new \DolibarrMcpSql\SqlPermissions($db, $conf, emmcp_sql_config());
 
 $code = $permissions->denialCode($testUser);
 check('still refused without opt-in', $code === 'SQL_PERMISSION_DENIED', (string) $code);
 
 print "\n== Flag on, user opted in, right granted ==\n";
 $permissions->setUserOptIn(1, true, 1);
-$permissions = new EmmcpSqlPermissions($db, $conf);
+$permissions = new \DolibarrMcpSql\SqlPermissions($db, $conf, emmcp_sql_config());
 check('user opt-in persisted', $permissions->hasUserOptIn(1));
 
 // Being an administrator is NOT enough: Dolibarr only force-grants a handful of
@@ -352,7 +351,7 @@ print "  info user is admin=".((int) $testUser->admin).", hasRight(emmcp/sqlquer
 if ($code === null) {
 	check('access granted', true);
 
-	$capability = new EmmcpSqlCapability($db, $conf, $testUser, $auditSource);
+	$capability = new \DolibarrMcpSql\SqlCapability($db, $conf, $testUser, emmcp_sql_config(), $auditSource);
 	$names = listToolNames($capability);
 	check('dolibarr_sql_query is PRESENT', in_array('dolibarr_sql_query', $names, true));
 	check('dolibarr_sql_schema is PRESENT', in_array('dolibarr_sql_schema', $names, true));

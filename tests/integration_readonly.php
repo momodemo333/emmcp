@@ -86,7 +86,7 @@ if (!file_exists($autoload)) {
 if (file_exists($autoload)) {
 	require_once $autoload;
 }
-check('MCP package autoloader available', class_exists('\\DolibarrMcp\\Sql\\GrantInspector'));
+check('MCP package autoloader available', class_exists('\\DolibarrMcp\\Sql\\SqlReadOnlyValidator'));
 
 // --- State capture and cleanup registration, before ANY mutation ------------
 //
@@ -99,10 +99,6 @@ dol_include_once('/emmcp/class/emmcpmigrations.class.php');
 
 // Whether each constant existed at all, not just its value: restoring a
 // missing constant as an empty string leaves a row that was not there before.
-$initialDbUser = getDolGlobalString('EMMCP_SQL_DB_USER');
-$initialDbPass = getDolGlobalString('EMMCP_SQL_DB_PASSWORD');
-$initialDbUserSet = ($initialDbUser !== '');
-$initialDbPassSet = ($initialDbPass !== '');
 
 // The schema version is mutated by the downgrade check further down.
 $initialSchemaVersion = '';
@@ -123,33 +119,7 @@ if ($resql) {
 // Accounts this run actually created. Only these are dropped: a fixed name
 // plus CREATE IF NOT EXISTS would silently adopt — and then delete — a
 // pre-existing account belonging to someone else.
-$createdDbUsers = array();
 $createdProbeTables = array();
-
-/**
- * Create a database account with a name unique to this run.
- *
- * CREATE without IF NOT EXISTS on purpose: if the name somehow already exists,
- * the run must fail rather than take over an account it did not make.
- *
- * @param  string $prefix Readable prefix
- * @param  string $grant  Privileges to grant on the current database
- * @return array{0: string, 1: string} user and password
- */
-function makeTestAccount($prefix, $grant)
-{
-    global $db, $dolibarr_main_db_name, $createdDbUsers;
-
-    $user = substr($prefix.'_'.bin2hex(random_bytes(4)), 0, 32);
-    $pass = 'p_'.bin2hex(random_bytes(8));
-
-    $db->query("CREATE USER '".$db->escape($user)."'@'%' IDENTIFIED BY '".$db->escape($pass)."'");
-    $createdDbUsers[] = $user;
-    $db->query("GRANT ".$grant." ON `".$dolibarr_main_db_name."`.* TO '".$db->escape($user)."'@'%'");
-    $db->query("FLUSH PRIVILEGES");
-
-    return array($user, $pass);
-}
 
 /**
  * Undo everything this run created or changed, whatever happens.
@@ -162,8 +132,7 @@ function makeTestAccount($prefix, $grant)
  */
 function emmcpReadonlyCleanup()
 {
-    global $db, $conf, $createdDbUsers, $createdProbeTables;
-    global $initialDbUser, $initialDbPass, $initialDbUserSet, $initialDbPassSet;
+    global $db, $conf, $createdProbeTables;
     global $initialSchemaVersion, $initialSchemaVersionSet;
 
     static $done = false;
@@ -172,29 +141,10 @@ function emmcpReadonlyCleanup()
     }
     $done = true;
 
-    foreach ($createdDbUsers as $user) {
-        $db->query("DROP USER IF EXISTS '".$db->escape($user)."'@'%'");
-    }
-    if ($createdDbUsers !== array()) {
-        $db->query("FLUSH PRIVILEGES");
-    }
-
     foreach ($createdProbeTables as $table) {
         $db->query("DROP TABLE IF EXISTS ".$table);
     }
 
-    // Restore absence as absence: writing an empty value would leave a
-    // constant row the instance did not have before this run.
-    if ($initialDbUserSet) {
-        dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $initialDbUser, 'chaine', 0, '', $conf->entity);
-    } else {
-        dolibarr_del_const($db, 'EMMCP_SQL_DB_USER', $conf->entity);
-    }
-    if ($initialDbPassSet) {
-        dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', $initialDbPass, 'chaine', 0, '', $conf->entity);
-    } else {
-        dolibarr_del_const($db, 'EMMCP_SQL_DB_PASSWORD', $conf->entity);
-    }
 
     if ($initialSchemaVersionSet) {
         $db->query(
@@ -237,124 +187,10 @@ foreach (array('emmcp_sql_permissions', 'emmcp_sql_audit') as $table) {
 	check('table '.MAIN_DB_PREFIX.$table.' exists', $resql && $db->num_rows($resql) === 1);
 }
 
-print "\n== Gateway: dedicated account is mandatory ==\n";
-dol_include_once('/emmcp/class/emmcpsqlgateway.class.php');
-
-// No dedicated account configured: the feature must simply not run. Falling
-// back to Dolibarr's own account would give a "read-only" feature full DML and
-// DDL privileges.
-dolibarr_del_const($db, 'EMMCP_SQL_DB_USER', $conf->entity);
-dolibarr_del_const($db, 'EMMCP_SQL_DB_PASSWORD', $conf->entity);
-unset($conf->global->EMMCP_SQL_DB_USER, $conf->global->EMMCP_SQL_DB_PASSWORD);
-
-try {
-	(new EmmcpSqlGateway(5, 10, 262144))->runSelect('SELECT rowid FROM '.MAIN_DB_PREFIX.'societe LIMIT 1');
-	check('refused without a dedicated account', false, 'the query ran');
-} catch (Throwable $e) {
-	check('refused without a dedicated account', true, $e->getMessage());
-}
-
-// Refusing the application account even when it is named explicitly.
-dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $dolibarr_main_db_user, 'chaine', 0, '', $conf->entity);
-dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', $dolibarr_main_db_pass, 'chaine', 0, '', $conf->entity);
-$conf->global->EMMCP_SQL_DB_USER = $dolibarr_main_db_user;
-$conf->global->EMMCP_SQL_DB_PASSWORD = $dolibarr_main_db_pass;
-
-try {
-	(new EmmcpSqlGateway(5, 10, 262144))->runSelect('SELECT rowid FROM '.MAIN_DB_PREFIX.'societe LIMIT 1');
-	check('refused when pointed at the application account', false, 'the query ran');
-} catch (Throwable $e) {
-	check('refused when pointed at the application account', true, $e->getMessage());
-}
-
-// Now provision a genuine SELECT-only account for the rest of the run.
-list($roUser, $roPass) = makeTestAccount('emmcp_ro', 'SELECT');
-
-$resql = $db->query("SELECT COUNT(*) as n FROM mysql.user WHERE user = '".$db->escape($roUser)."'");
-$obj = $resql ? $db->fetch_object($resql) : null;
-$provisioned = $obj && (int) $obj->n > 0;
-check('SELECT-only test account provisioned', $provisioned);
-
-if (!$provisioned) {
-	print "  cannot continue without the test account\n";
-	dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $initialDbUser, 'chaine', 0, '', $conf->entity);
-	exit(1);
-}
-
-dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $roUser, 'chaine', 0, '', $conf->entity);
-dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', $roPass, 'chaine', 0, '', $conf->entity);
-$conf->global->EMMCP_SQL_DB_USER = $roUser;
-$conf->global->EMMCP_SQL_DB_PASSWORD = $roPass;
-
-print "\n== Gateway: over-privileged accounts are refused ==\n";
-// Being dedicated is not the same as being restricted: nothing stops an
-// administrator from creating a separate account and granting it everything.
-// These accounts are all "dedicated" and all must be refused.
-$overPrivileged = array(
-	'select_plus_insert' => 'SELECT, INSERT',
-	'select_plus_create' => 'SELECT, CREATE',
-	'select_plus_execute' => 'SELECT, EXECUTE',
-);
-$probeUsers = array();
-
-foreach ($overPrivileged as $label => $grant) {
-	list($pUser, $pPass) = makeTestAccount('emmcp_probe', $grant);
-	$probeUsers[] = $pUser;
-
-	dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $pUser, 'chaine', 0, '', $conf->entity);
-	dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', $pPass, 'chaine', 0, '', $conf->entity);
-	$conf->global->EMMCP_SQL_DB_USER = $pUser;
-	$conf->global->EMMCP_SQL_DB_PASSWORD = $pPass;
-
-	try {
-		(new EmmcpSqlGateway(5, 10, 262144))->runSelect('SELECT rowid FROM '.MAIN_DB_PREFIX.'societe LIMIT 1');
-		check('refused: account with '.$grant, false, 'the query ran');
-	} catch (Throwable $e) {
-		$msg = $e->getMessage();
-		check('refused: account with '.$grant, true);
-		// Grant lines carry the account password hash; the reason must not
-		// quote one.
-		check(
-			'  refusal reason quotes no grant line',
-			stripos($msg, 'IDENTIFIED') === false && stripos($msg, 'GRANT USAGE') === false,
-			$msg
-		);
-	}
-}
-
-// A global SELECT reaches every database on the server.
-$gUser = substr('emmcp_probe_g_'.bin2hex(random_bytes(4)), 0, 32);
-$gPass = 'p_'.bin2hex(random_bytes(8));
-$probeUsers[] = $gUser;
-$createdDbUsers[] = $gUser;
-$db->query("CREATE USER '".$db->escape($gUser)."'@'%' IDENTIFIED BY '".$db->escape($gPass)."'");
-$db->query("GRANT SELECT ON *.* TO '".$db->escape($gUser)."'@'%'");
-$db->query("FLUSH PRIVILEGES");
-dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $gUser, 'chaine', 0, '', $conf->entity);
-dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', $gPass, 'chaine', 0, '', $conf->entity);
-$conf->global->EMMCP_SQL_DB_USER = $gUser;
-$conf->global->EMMCP_SQL_DB_PASSWORD = $gPass;
-try {
-	(new EmmcpSqlGateway(5, 10, 262144))->runSelect('SELECT rowid FROM '.MAIN_DB_PREFIX.'societe LIMIT 1');
-	check('refused: account with global SELECT', false, 'the query ran');
-} catch (Throwable $e) {
-	check('refused: account with global SELECT', true);
-}
-
-foreach ($probeUsers as $pUser) {
-	$db->query("DROP USER IF EXISTS '".$db->escape($pUser)."'@'%'");
-}
-$db->query("FLUSH PRIVILEGES");
-check('probe accounts removed', true);
-
-// Back to the genuinely SELECT-only account for the rest of the run.
-dolibarr_set_const($db, 'EMMCP_SQL_DB_USER', $roUser, 'chaine', 0, '', $conf->entity);
-dolibarr_set_const($db, 'EMMCP_SQL_DB_PASSWORD', $roPass, 'chaine', 0, '', $conf->entity);
-$conf->global->EMMCP_SQL_DB_USER = $roUser;
-$conf->global->EMMCP_SQL_DB_PASSWORD = $roPass;
-
 print "\n== Gateway: engine-level read-only ==\n";
-$gateway = new EmmcpSqlGateway(5, 10, 262144);
+dol_include_once('/emmcp/lib/emmcp_bootstrap.php');
+check('dolibarr-mcp-sql library found', emmcp_mcp_sql_autoload() !== null);
+$gateway = new \DolibarrMcpSql\SqlGateway(5, 10, 262144, '[EMMCP]');
 
 // A legitimate read must work.
 try {
@@ -375,9 +211,9 @@ try {
 }
 
 // DDL is NOT stopped by a read-only transaction: CREATE/DROP/ALTER force an
-// implicit commit and run anyway. The gateway's own keyword guard is what
-// blocks it here; a MySQL account limited to SELECT (EMMCP_SQL_DB_USER) is the
-// only way to have the server enforce it.
+// implicit commit and run anyway. Since the dedicated SELECT-only account is
+// gone, the gateway's own keyword guard and the validator upstream are the
+// whole guarantee — which is exactly why this check must stay green.
 try {
 	$gateway->runSelect("CREATE TABLE ".MAIN_DB_PREFIX."emmcp_should_never_exist (a int)");
 	check('CREATE TABLE refused', false, 'DDL was accepted');
@@ -434,7 +270,7 @@ try {
 
 print "\n== Gateway: row cap ==\n";
 try {
-	$capped = new EmmcpSqlGateway(5, 2, 262144);
+	$capped = new \DolibarrMcpSql\SqlGateway(5, 2, 262144, '[EMMCP]');
 	$out = $capped->runSelect('SELECT rowid FROM '.MAIN_DB_PREFIX.'societe LIMIT 100');
 	check('rows are capped at the configured maximum', $out['row_count'] <= 2, 'got '.$out['row_count']);
 } catch (Throwable $e) {
@@ -477,68 +313,14 @@ if (file_exists($autoload)) {
 	print "  SKIP validator checks (MCP package autoloader not found)\n";
 }
 
-print "\n== Server-enforced read-only (SELECT-only grant) ==\n";
-// With a SELECT-only account the refusal comes from the server itself, not
-// from the gateway's keyword guard — which is the whole point of requiring it.
-/**
- * Run a statement and report whether the server refused it.
- *
- * mysqli may be in exception mode (Dolibarr sets mysqli_report), so a refusal
- * arrives as a thrown error rather than a false return. Both count.
- *
- * @param  mysqli $link Connection
- * @param  string $sql  Statement
- * @return bool         True when the server refused it
- */
-function serverRefuses($link, $sql)
-{
-	try {
-		return @$link->query($sql) === false;
-	} catch (Throwable $e) {
-		return true;
-	}
-}
-
-$probeTable = MAIN_DB_PREFIX.'emmcp_probe_'.bin2hex(random_bytes(4));
-$createdProbeTables[] = $probeTable;
-
-try {
-	$link = new mysqli($dolibarr_main_db_host, $roUser, $roPass, $dolibarr_main_db_name, !empty($dolibarr_main_db_port) ? (int) $dolibarr_main_db_port : 3306);
-	check('test account can connect', !$link->connect_errno, (string) $link->connect_error);
-
-	check(
-		'server refuses DDL for the test account',
-		serverRefuses($link, "CREATE TABLE ".$probeTable." (a int)")
-	);
-	check(
-		'server refuses UPDATE for the test account',
-		serverRefuses($link, "UPDATE ".MAIN_DB_PREFIX."societe SET nom = nom WHERE rowid = 0")
-	);
-	check(
-		'server refuses INSERT for the test account',
-		serverRefuses($link, "INSERT INTO ".MAIN_DB_PREFIX."societe (nom) VALUES ('x')")
-	);
-	check(
-		'server allows SELECT for the test account',
-		!serverRefuses($link, "SELECT rowid FROM ".MAIN_DB_PREFIX."societe LIMIT 1")
-	);
-	$link->close();
-} catch (Throwable $e) {
-	check('grant probe', false, $e->getMessage());
-}
-
 print "\n== Cleanup ==\n";
 emmcpReadonlyCleanup();
 
-$resql = $db->query("SELECT COUNT(*) as n FROM mysql.user WHERE user = '".$db->escape($roUser)."'");
-$obj = $resql ? $db->fetch_object($resql) : null;
-check('test account removed', $obj && (int) $obj->n === 0);
+// The gateway must not have been able to create anything, so the probe name
+// used by the DDL attempts above must still be absent after cleanup.
+$resql = $db->query("SHOW TABLES LIKE '".MAIN_DB_PREFIX."emmcp_should_never_exist'");
+check('no probe table survives', $resql && $db->num_rows($resql) === 0);
 
-$resql = $db->query("SHOW TABLES LIKE '".$db->escape($probeTable)."'");
-check('probe table removed', $resql && $db->num_rows($resql) === 0);
-
-$stillSet = (getDolGlobalString('EMMCP_SQL_DB_USER') !== '');
-check('credential constant restored to its initial presence', $stillSet === $initialDbUserSet);
 
 print "\n".($failures === 0 ? "ALL CHECKS PASSED\n" : $failures." CHECK(S) FAILED\n");
 exit($failures === 0 ? 0 : 1);

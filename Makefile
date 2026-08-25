@@ -19,6 +19,9 @@ MCP_PACKAGE_SRC ?= ../dalfred/dolibarr-mcp-server
 # Source of the embedded dolibarr-mcp-oauth library (single upstream repo).
 # Overridable: make build-release LIB_OAUTH_SRC=/path/to/dolibarr-mcp-oauth
 LIB_OAUTH_SRC ?= ../../../../../dolibarr-mcp-oauth
+# Source of the embedded dolibarr-mcp-sql library (read-only SQL over MCP),
+# shared with Dalfred. Overridable: make build-release LIB_SQL_SRC=/path/…
+LIB_SQL_SRC ?= ../../../../../dolibarr-mcp-sql
 
 # Extract version from the module descriptor
 VERSION := $(shell grep -oP "\\\$$this->version\s*=\s*'\K[^']+" $(MODULE_FILE))
@@ -34,10 +37,11 @@ CRITICAL_FILES := mcp.php oauth.php .htaccess \
 	sql/llx_emmcp_sql_audit.sql \
 	sql/llx_emmcp_sql_permissions.sql \
 	class/emmcpmigrations.class.php \
-	class/emmcpsqlpermissions.class.php \
-	class/emmcpsqlgateway.class.php \
-	class/emmcpsqlaudit.class.php \
-	class/emmcpsqlcapability.class.php \
+	vendor/dolibarr-mcp-sql/src/SqlCapability.php \
+	vendor/dolibarr-mcp-sql/src/SqlGateway.php \
+	vendor/dolibarr-mcp-sql/src/SqlPermissions.php \
+	vendor/dolibarr-mcp-sql/src/SqlAudit.php \
+	vendor/dolibarr-mcp-sql/src/SqlConfig.php \
 	vendor/dolibarr-mcp-server/LLM.md \
 	vendor/dolibarr-mcp-server/vendor/autoload.php \
 	vendor/dolibarr-mcp-server/src/Sql/SqlReadOnlyValidator.php \
@@ -85,7 +89,7 @@ lint:
 # bundle. The build refuses to package anything else: the package is a separate
 # repository, so without this the ZIP silently carries whatever happens to be
 # checked out — a work-in-progress branch, or a stale tree.
-EXPECTED_RUNTIME_VERSION ?= 2.2.0
+EXPECTED_RUNTIME_VERSION ?= 2.3.0
 
 # Same for the shared OAuth library: it is a third separate repository, and the
 # build would otherwise bundle whatever is checked out beside it.
@@ -188,6 +192,14 @@ build-release: check-runtime check-oauth
 	@mkdir -p $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-oauth
 	@cp -r $(LIB_OAUTH_SRC)/src $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-oauth/
 	@cp $(LIB_OAUTH_SRC)/composer.json $(LIB_OAUTH_SRC)/README.md $(LIB_OAUTH_SRC)/CHANGELOG.md $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-oauth/
+
+	# Same arrangement for dolibarr-mcp-sql: without it in the package the SQL
+	# tools stay hidden on a customer install, since the loader finds no library.
+	@echo "[3b/7] Bundling dolibarr-mcp-sql library..."
+	@test -d "$(LIB_SQL_SRC)/src" || (echo "$(RED)dolibarr-mcp-sql source not found: $(LIB_SQL_SRC)$(NC)" && exit 1)
+	@mkdir -p $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-sql
+	@cp -r $(LIB_SQL_SRC)/src $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-sql/
+	@cp $(LIB_SQL_SRC)/composer.json $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-sql/
 
 	@echo "[4/7] Installing production Composer dependencies (--no-dev)..."
 	@cd $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server && \
