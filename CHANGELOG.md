@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.1] - 2026-08-26
+
+### Fixed
+- **Schema exploration is usable again.** `dolibarr_sql_schema` called without a
+  table returned every column of every table — large enough that the server cut
+  it at 200 tables in alphabetical order, so common tables were missing from the
+  answer with nothing saying so. It now returns table names only, complete.
+  Passing an exact table name returns that table instead of everything sharing
+  its prefix.
+- **`SELECT *` works on ordinary tables.** It was refused on principle; the
+  columns it stands for are now resolved and checked, so it is allowed where
+  nothing sensitive is exposed and refused — naming the offending column — where
+  something is.
+- **`duration_ms` reports a real duration** instead of 0 for anything fast.
+
 ## [1.3.0] - 2026-08-25
 
 ### Changed

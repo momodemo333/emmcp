@@ -380,7 +380,7 @@ if ($code === null) {
 	$bypasses = array(
 		'cross-database read'      => array('SELECT rowid FROM mysql.user', 'SQL_QUALIFIED_TABLE'),
 		'own database qualified'   => array('SELECT rowid FROM '.$db->database_name.'.'.MAIN_DB_PREFIX.'societe', 'SQL_QUALIFIED_TABLE'),
-		'star on ordinary table'   => array('SELECT * FROM '.MAIN_DB_PREFIX.'facture', 'SQL_STAR_NOT_ALLOWED'),
+		'star over a credential table' => array('SELECT * FROM '.MAIN_DB_PREFIX.'user', 'SQL_STAR_NOT_ALLOWED'),
 		'optimizer hint'           => array('SELECT /*+ MAX_EXECUTION_TIME(0) */ rowid FROM '.MAIN_DB_PREFIX.'societe', 'SQL_OPTIMIZER_HINT'),
 		'mariadb comment'          => array('SELECT 1 /*M! , 2 */', 'SQL_EXECUTABLE_COMMENT'),
 		'lock in share mode'       => array('SELECT rowid FROM '.MAIN_DB_PREFIX.'societe LOCK IN SHARE MODE', 'SQL_NOT_READ_ONLY'),
