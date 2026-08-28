@@ -41,7 +41,7 @@ class modEmmcp extends DolibarrModules
 
 		$this->db = $db;
 
-		$this->numero = 491410;
+		$this->numero = 491412;
 		$this->rights_class = 'emmcp';
 		$this->family = 'interface';
 		$this->module_position = '90';
@@ -52,7 +52,7 @@ class modEmmcp extends DolibarrModules
 		$this->editor_url = 'https://www.e-dem.com';
 		// Keep in sync with EmmcpMigrations::MODULE_VERSION, or migrations
 		// silently stop running on existing installs.
-		$this->version = '1.3.2';
+		$this->version = '1.3.3';
 		// Native Dolibarr "update available" check (compares this URL's answer to $this->version)
 		$this->url_last_version = 'https://www.e-dem.com/dolibarr/emmcp/last_version.php';
 		$this->const_name = 'MAIN_MODULE_'.strtoupper($this->name);
@@ -93,6 +93,12 @@ class modEmmcp extends DolibarrModules
 		// module owns it. That is exactly what happened here — emMCP shared
 		// 491409 with emSmartFill, and this right showed up inside emSmartFill's
 		// block on the permissions screen.
+		//
+		// The number itself comes from the E-dem registry in
+		// dolibarr/docs/INVENTAIRE-MODULES.md, which is the only reliable answer
+		// to "which number is free": 491410 and 491411 look free from this
+		// repository alone but belong to admdashboard and emtimetobill, which
+		// live in other project directories.
 		$this->rights[$r][0] = $this->numero . sprintf("%02d", $r + 1);
 		$this->rights[$r][1] = 'EmmcpRightSqlQuery';
 		$this->rights[$r][3] = 0; // not granted by default

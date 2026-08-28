@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.3.3] - 2026-08-28
+
+### Fixed
+- **Module number moved to 491412.** 1.3.2 moved it off emSmartFill's 491409 and
+  onto 491410 — which belongs to admdashboard, so it simply traded one collision
+  for another. The authoritative list of taken numbers is the E-dem registry in
+  `dolibarr/docs/INVENTAIRE-MODULES.md`, not what is visible from one repository:
+  491410 and 491411 look free from here but belong to modules living in other
+  project directories. 491412 is the first genuinely free number, and the
+  registry now records it.
+
+### Upgrade note
+Only the developer's own installation is affected, and only if 1.3.2 was
+installed. Remove both stale permission rows before upgrading:
+
+```sql
+DELETE FROM llx_user_rights      WHERE fk_id IN (491410, 49141001);
+DELETE FROM llx_usergroup_rights WHERE fk_id IN (491410, 49141001);
+DELETE FROM llx_rights_def       WHERE module = 'emmcp' AND id IN (491410, 49141001);
+```
+
+Then open the emMCP admin page: the migration recreates the right as 49141201.
+
 ## [1.3.2] - 2026-08-28
 
 ### Fixed

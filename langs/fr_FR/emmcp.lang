@@ -1,6 +1,6 @@
 # Dolibarr language file - fr_FR - emmcp
-Module491410Name = emMCP
-Module491410Desc = Expose Dolibarr comme serveur MCP distant (OAuth 2.1) pour les clients IA
+Module491412Name = emMCP
+Module491412Desc = Expose Dolibarr comme serveur MCP distant (OAuth 2.1) pour les clients IA
 EmmcpName=emMCP
 EmmcpDescription=Serveur MCP distant pour Dolibarr
 EmmcpDescriptionDetail=Expose votre Dolibarr comme serveur MCP (Model Context Protocol) via HTTP. Connectez Claude, Claude Code ou tout agent IA compatible MCP à votre ERP : consultation et gestion des tiers, factures, produits, commandes, projets, documents… avec les permissions de l'utilisateur associé à la clé API.
