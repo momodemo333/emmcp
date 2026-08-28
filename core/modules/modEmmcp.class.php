@@ -41,7 +41,7 @@ class modEmmcp extends DolibarrModules
 
 		$this->db = $db;
 
-		$this->numero = 491409;
+		$this->numero = 491410;
 		$this->rights_class = 'emmcp';
 		$this->family = 'interface';
 		$this->module_position = '90';
@@ -52,7 +52,7 @@ class modEmmcp extends DolibarrModules
 		$this->editor_url = 'https://www.e-dem.com';
 		// Keep in sync with EmmcpMigrations::MODULE_VERSION, or migrations
 		// silently stop running on existing installs.
-		$this->version = '1.3.1';
+		$this->version = '1.3.2';
 		// Native Dolibarr "update available" check (compares this URL's answer to $this->version)
 		$this->url_last_version = 'https://www.e-dem.com/dolibarr/emmcp/last_version.php';
 		$this->const_name = 'MAIN_MODULE_'.strtoupper($this->name);
@@ -88,7 +88,12 @@ class modEmmcp extends DolibarrModules
 		// Raw SQL cannot inherit anything, so it gets an explicit right, off
 		// for everyone until an administrator grants it.
 		$r = 0;
-		$this->rights[$r][0] = $this->numero + 1;
+		// numero . sprintf("%02d") rather than numero + 1: the latter produces an
+		// id that is itself a valid module number, so it collides with whatever
+		// module owns it. That is exactly what happened here — emMCP shared
+		// 491409 with emSmartFill, and this right showed up inside emSmartFill's
+		// block on the permissions screen.
+		$this->rights[$r][0] = $this->numero . sprintf("%02d", $r + 1);
 		$this->rights[$r][1] = 'EmmcpRightSqlQuery';
 		$this->rights[$r][3] = 0; // not granted by default
 		$this->rights[$r][4] = 'sqlquery';

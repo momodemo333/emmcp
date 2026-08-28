@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.3.2] - 2026-08-28
+
+### Fixed
+- **Module number collision with emSmartFill.** Both declared `numero = 491409`,
+  so the SQL permission was listed inside emSmartFill's block on the user
+  permissions screen instead of emMCP's. emMCP moves to 491410 — emSmartFill is
+  already distributed, this one is not.
+- **Permission id no longer computed as `numero + 1`.** That produces a value
+  which is itself a valid module number, so it collides with whatever module
+  owns it; it now uses Dolibarr's `numero . sprintf("%02d", …)` convention.
+- **The module is named "emMCP" on the permissions screen**, not "Emmcp": the
+  `Module491410Name` / `Module491410Desc` keys were missing, so Dolibarr fell
+  back to the class name.
+
+### Upgrade note
+A Dolibarr that had 1.3.1 or earlier installed keeps the old permission row
+(id 491410) alongside the new one, showing the SQL permission twice. It is
+granted to nobody, so it can be removed safely:
+
+```sql
+DELETE FROM llx_rights_def WHERE id = 491410 AND module = 'emmcp';
+```
+
+No migration does this automatically: the module has not been distributed, so
+the only affected installation is the developer's own.
+
 ## [1.3.1] - 2026-08-26
 
 ### Fixed

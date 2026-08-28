@@ -1,4 +1,6 @@
 # Dolibarr language file - en_US - emmcp
+Module491410Name = emMCP
+Module491410Desc = Exposes Dolibarr as a remote MCP server (OAuth 2.1) for AI clients
 EmmcpName=emMCP
 EmmcpDescription=Remote MCP server for Dolibarr
 EmmcpDescriptionDetail=Exposes your Dolibarr as an MCP (Model Context Protocol) server over HTTP. Connect Claude, Claude Code or any MCP-compatible AI agent to your ERP: browse and manage third parties, invoices, products, orders, projects, documents… with the permissions of the user tied to the API key.
