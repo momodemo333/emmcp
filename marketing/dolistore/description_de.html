@@ -1,0 +1,80 @@
+<!-- emMCP — Dolistore-Beschreibung — Deutsch -->
+
+<!-- ============================================ -->
+<!-- KURZBESCHREIBUNG (max. 400 Zeichen)          -->
+<!-- 377 Zeichen                                  -->
+<!-- ============================================ -->
+<!--
+Verbinden Sie Ihren KI-Assistenten direkt mit Ihrem Dolibarr. emMCP stellt Ihr ERP als MCP-Server bereit: Connector in claude.ai, Claude Code oder einem beliebigen kompatiblen Client hinzufügen und im Dialog mit Ihren Daten arbeiten. Jede Aktion folgt den Dolibarr-Berechtigungen des verknüpften Benutzers. In Minuten eingerichtet, ohne eigenen Dienst.
+-->
+
+
+<!-- ============================================ -->
+<!-- LANGBESCHREIBUNG (HTML)                      -->
+<!-- ============================================ -->
+
+<h2>emMCP — Ihren KI-Assistenten mit Dolibarr verbinden</h2>
+
+<p>Sie nutzen bereits täglich einen KI-Assistenten. <strong>emMCP</strong> gibt ihm Zugriff auf Ihr Dolibarr: Ihre Geschäftspartner, Rechnungen, Artikel, Bestellungen, Projekte und Dokumente. Sie stellen Ihre Fragen und erteilen Ihre Anweisungen im gewohnten Assistenten — er arbeitet direkt in Ihrem ERP.</p>
+
+<p>Kein neuer Assistent, keine zusätzliche Oberfläche: Sie behalten das Werkzeug, das Sie ohnehin verwenden.</p>
+
+<hr>
+
+<h3>⚡ Drei Schritte, und es läuft</h3>
+<ol>
+  <li><strong>Modul installieren und aktivieren</strong> — wie jedes andere Dolibarr-Modul.</li>
+  <li><strong>Berechtigungen setzen</strong> für den Benutzer, in dessen Namen der Assistent handelt. Mehr ist nicht einzurichten: Der Assistent erbt genau diese Rechte.</li>
+  <li><strong>Connector hinzufügen</strong> in Ihrem KI-Client, indem Sie die vom Modul angezeigte URL einfügen.</li>
+</ol>
+<p>Die Konfigurationsseite liefert URL, Befehl und Konfigurationsdatei fertig zum Kopieren — passend zum jeweiligen Client. Das dauert wenige Minuten.</p>
+
+<h3>🔌 Kompatibel mit den Clients, die Sie schon nutzen</h3>
+<ul>
+  <li><strong>claude.ai</strong> (Web und App) — eigener Connector mit OAuth-Anmeldung: Sie melden sich mit Ihrem Dolibarr-Konto an und erteilen Ihre Zustimmung. Kein Schlüssel zum Kopieren.</li>
+  <li><strong>Claude Code</strong> — ein einziger Befehl.</li>
+  <li><strong>Anthropic-API</strong> und jeder <strong>MCP-Client</strong> mit HTTP-Transport.</li>
+</ul>
+
+<h3>💬 Was Ihr Assistent kann</h3>
+<p>Rund zwanzig Werkzeuge decken den Dolibarr-Alltag ab:</p>
+<ul>
+  <li><strong>Nachschlagen und suchen</strong> — „Welche Rechnungen dieses Kunden sind offen?“, „Finde die Bestellung von letzter Woche für Dupont“</li>
+  <li><strong>Anlegen und ändern</strong> — Geschäftspartner, Angebote, Rechnungen, Bestellungen, Artikel, Projekte samt Positionen</li>
+  <li><strong>Geschäftsvorgänge verketten</strong> — Angebot freigeben, in eine Bestellung umwandeln, PDF erzeugen</li>
+  <li><strong>Dokumente verwalten</strong> — auflisten, hochladen, herunterladen, PDFs aus Ihren Dolibarr-Vorlagen erzeugen</li>
+  <li><strong>Mit Zusatzfeldern arbeiten</strong>, mit verknüpften Kontakten und der Zeiterfassung</li>
+</ul>
+<p>Die Werkzeuge laufen über die REST-API von Dolibarr: Was Ihr Assistent sehen und tun kann, entspricht genau dem, was der verknüpfte Benutzer in der Oberfläche sehen und tun kann.</p>
+
+<h3>🔒 Ihre Dolibarr-Berechtigungen entscheiden</h3>
+<p>Das ist das Grundprinzip des Moduls. Der Assistent hat keine eigenen Rechte: Er handelt im Namen eines Dolibarr-Benutzers, mit dessen Berechtigungen, Modul für Modul. Sie möchten einen rein lesenden Assistenten für die Buchhaltung? Legen Sie einen Benutzer mit Leserechten an. Er soll Rechnungen schreiben, aber Gehälter nie sehen? Das ist eine Berechtigungseinstellung — genau die, die Sie ohnehin beherrschen.</p>
+<p>Die Anmeldung erfolgt je nach Client über OAuth 2.1 (mit PKCE und Token-Rotation) oder über einen API-Schlüssel; ein Zugriff lässt sich jederzeit widerrufen.</p>
+
+<h3>📊 SQL-Abfragen nur lesend — optional, standardmäßig aus</h3>
+<p>Für Auswertungen, welche die REST-API nicht abdeckt — Aggregate über mehrere Jahre, tabellenübergreifende Auswertungen, eigene Dashboards — kann das Modul einen <strong>rein lesenden</strong> SQL-Zugriff öffnen. Er ist ab Werk deaktiviert und durch mehrere voneinander unabhängige Sperren geschützt:</p>
+<ul>
+  <li>ein globaler Schalter, nach der Installation aus;</li>
+  <li>eine Dolibarr-Berechtigung, die zunächst niemand besitzt;</li>
+  <li>eine namentliche Freigabe je Benutzer;</li>
+  <li>eine eigene Sperre für Mandantenumgebungen.</li>
+</ul>
+<p>Solange auch nur eine dieser Bedingungen fehlt, erscheinen die SQL-Werkzeuge nicht einmal in der Werkzeugliste des Clients.</p>
+<p>Jede Abfrage durchläuft einen Lexer und einen SQL-Parser, bevor sie den Server erreicht: Nur lesende Anweisungen kommen durch. Schreibzugriffe, Strukturbefehle, mehrere Anweisungen sowie Passwort- und Schlüsselspalten werden abgelehnt — auch dann, wenn ein Schreib-Schlüsselwort in einer Zeichenkette versteckt ist. Joins, Unterabfragen, UNION und Aggregate funktionieren normal. Zeilenzahl, Laufzeit und Antwortgröße sind begrenzt, und jede Abfrage wird protokolliert.</p>
+
+<h3>🛠️ Nichts zu hosten, nichts zu überwachen</h3>
+<p>emMCP läuft in Ihrem bestehenden Dolibarr wie jede PHP-Seite. Kein Dienst zu starten, kein Port zu öffnen, kein Container zu pflegen. Wenn Ihr Dolibarr antwortet, antwortet Ihr MCP-Server.</p>
+
+<h3>⚙️ Voraussetzungen</h3>
+<ul>
+  <li>Dolibarr ab Version 16, PHP ab 8.1</li>
+  <li>Aktiviertes <strong>REST-API</strong>-Modul von Dolibarr</li>
+  <li>HTTPS-Zugriff auf Ihre Instanz vom KI-Client aus</li>
+  <li>Ein Konto beim KI-Anbieter Ihrer Wahl — das Modul selbst verlangt kein zusätzliches Abonnement</li>
+</ul>
+
+<h3>📚 Mehr erfahren</h3>
+<p>Ausführliche Vorstellung, Verbindungsanleitung und Anwendungsfälle: <a href="https://www.e-dem.com/de/produits/emmcp">www.e-dem.com/de/produits/emmcp</a></p>
+
+<h3>🤝 Support</h3>
+<p>Support und Updates durch E-dem. Fragen vor dem Kauf? Schreiben Sie uns, wir antworten.</p>

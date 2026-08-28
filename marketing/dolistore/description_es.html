@@ -1,0 +1,80 @@
+<!-- emMCP — Descripción Dolistore — Español -->
+
+<!-- ============================================ -->
+<!-- DESCRIPCIÓN CORTA (máx. 400 caracteres)      -->
+<!-- 379 caracteres                               -->
+<!-- ============================================ -->
+<!--
+Conecte su asistente de IA directamente a su Dolibarr. emMCP expone su ERP como servidor MCP: añada el conector en claude.ai, Claude Code o cualquier cliente compatible y trabaje con sus datos conversando. Cada acción respeta los permisos Dolibarr del usuario asociado. Se configura en minutos y no hay ningún servicio que alojar.
+-->
+
+
+<!-- ============================================ -->
+<!-- DESCRIPCIÓN LARGA (HTML)                     -->
+<!-- ============================================ -->
+
+<h2>emMCP — Conecte su asistente de IA a su Dolibarr</h2>
+
+<p>Ya utiliza un asistente de IA a diario. <strong>emMCP</strong> le da acceso a su Dolibarr: sus terceros, facturas, artículos, pedidos, proyectos y documentos. Usted plantea sus preguntas y da sus instrucciones en el asistente de siempre, y este trabaja directamente en su ERP.</p>
+
+<p>Ningún asistente nuevo que aprender, ninguna interfaz adicional: conserva la herramienta que ya usa.</p>
+
+<hr>
+
+<h3>⚡ Tres pasos y listo</h3>
+<ol>
+  <li><strong>Instale y active el módulo</strong>, como cualquier otro módulo de Dolibarr.</li>
+  <li><strong>Configure los permisos</strong> del usuario en cuyo nombre actuará el asistente. Esa es toda la configuración: el asistente hereda exactamente esos derechos.</li>
+  <li><strong>Añada el conector</strong> en su cliente de IA pegando la URL que muestra el módulo.</li>
+</ol>
+<p>La página de configuración le entrega la URL, el comando y el archivo de configuración listos para copiar, según el cliente que utilice. Cuestión de minutos.</p>
+
+<h3>🔌 Compatible con los clientes que ya utiliza</h3>
+<ul>
+  <li><strong>claude.ai</strong> (web y aplicación) — conector personalizado con autenticación OAuth: inicia sesión con su cuenta Dolibarr y da su consentimiento. Ninguna clave que copiar.</li>
+  <li><strong>Claude Code</strong> — un solo comando.</li>
+  <li><strong>API de Anthropic</strong> y cualquier <strong>cliente MCP</strong> con transporte HTTP.</li>
+</ul>
+
+<h3>💬 Lo que su asistente puede hacer</h3>
+<p>Una veintena de herramientas cubren el día a día de Dolibarr:</p>
+<ul>
+  <li><strong>Consultar y buscar</strong> — «¿Qué facturas de este cliente están pendientes?», «Encuentra el pedido de la semana pasada para Dupont»</li>
+  <li><strong>Crear y modificar</strong> — terceros, presupuestos, facturas, pedidos, artículos, proyectos, con sus líneas</li>
+  <li><strong>Encadenar acciones de negocio</strong> — validar un presupuesto, convertirlo en pedido, generar el PDF</li>
+  <li><strong>Gestionar documentos</strong> — listar, subir, descargar, generar PDF desde sus plantillas de Dolibarr</li>
+  <li><strong>Trabajar con sus campos personalizados</strong>, contactos vinculados e imputación de tiempos</li>
+</ul>
+<p>Las herramientas pasan por la API REST de Dolibarr: lo que su asistente puede ver y hacer coincide exactamente con lo que el usuario asociado puede ver y hacer en la interfaz.</p>
+
+<h3>🔒 Mandan sus permisos de Dolibarr</h3>
+<p>Es el principio de fondo del módulo. El asistente no tiene derechos propios: actúa en nombre de un usuario Dolibarr, con sus permisos, módulo a módulo. ¿Quiere un asistente de solo lectura para contabilidad? Cree un usuario de solo lectura. ¿Que pueda emitir facturas pero nunca ver las nóminas? Es un ajuste de permisos, el mismo que ya domina.</p>
+<p>La autenticación se realiza mediante OAuth 2.1 (con PKCE y rotación de tokens) o con una clave API según el cliente, y puede revocar un acceso en cualquier momento.</p>
+
+<h3>📊 Consultas SQL de solo lectura — opcional, desactivado por defecto</h3>
+<p>Para los análisis que la API REST no cubre — agregados de varios años, cruces de tablas, cuadros de mando a medida — el módulo puede abrir un acceso SQL <strong>estrictamente de lectura</strong>. Viene desactivado y está protegido por varios cierres independientes:</p>
+<ul>
+  <li>un interruptor global, apagado tras la instalación;</li>
+  <li>un permiso Dolibarr, que por defecto no tiene nadie;</li>
+  <li>una validación nominal, usuario por usuario;</li>
+  <li>una protección específica para entornos multiempresa.</li>
+</ul>
+<p>Mientras falte una sola de esas condiciones, las herramientas SQL ni siquiera aparecen en la lista de herramientas del cliente.</p>
+<p>Cada consulta pasa por un analizador léxico y un analizador sintáctico SQL antes de llegar al servidor: solo pasan las consultas de lectura. Las escrituras, los comandos de estructura, las instrucciones múltiples y las columnas de contraseñas o claves se rechazan, incluso cuando una palabra clave de escritura se esconde dentro de una cadena de texto. Las uniones, subconsultas, UNION y agregados funcionan con normalidad. El número de filas, la duración y el tamaño de la respuesta están limitados, y cada consulta queda registrada.</p>
+
+<h3>🛠️ Nada que alojar, nada que vigilar</h3>
+<p>emMCP funciona dentro de su Dolibarr existente, como cualquier página PHP. Ningún servicio que arrancar, ningún puerto que abrir, ningún contenedor que mantener. Si su Dolibarr responde, su servidor MCP responde.</p>
+
+<h3>⚙️ Requisitos</h3>
+<ul>
+  <li>Dolibarr 16 o superior, PHP 8.1 o superior</li>
+  <li>Módulo <strong>API REST</strong> de Dolibarr activado</li>
+  <li>Acceso HTTPS a su instancia desde el cliente de IA</li>
+  <li>Una cuenta con el proveedor de IA que elija — el módulo no añade ninguna suscripción propia</li>
+</ul>
+
+<h3>📚 Más información</h3>
+<p>Presentación detallada, guía de conexión y casos de uso: <a href="https://www.e-dem.com/es/produits/emmcp">www.e-dem.com/es/produits/emmcp</a></p>
+
+<h3>🤝 Soporte</h3>
+<p>Soporte y actualizaciones a cargo de E-dem. ¿Alguna pregunta antes de comprar? Escríbanos, le respondemos.</p>

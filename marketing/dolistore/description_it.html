@@ -1,0 +1,80 @@
+<!-- emMCP — Descrizione Dolistore — Italiano -->
+
+<!-- ============================================ -->
+<!-- DESCRIZIONE BREVE (max 400 caratteri)        -->
+<!-- 376 caratteri                                -->
+<!-- ============================================ -->
+<!--
+Collegate il vostro assistente IA direttamente al vostro Dolibarr. emMCP espone il vostro ERP come server MCP: aggiungete il connettore in claude.ai, Claude Code o in qualsiasi client compatibile e lavorate sui vostri dati dialogando. Ogni azione rispetta i permessi Dolibarr dell'utente collegato. Si configura in pochi minuti, senza servizi da ospitare.
+-->
+
+
+<!-- ============================================ -->
+<!-- DESCRIZIONE COMPLETA (HTML)                  -->
+<!-- ============================================ -->
+
+<h2>emMCP — Collegate il vostro assistente IA al vostro Dolibarr</h2>
+
+<p>Usate già un assistente IA tutti i giorni. <strong>emMCP</strong> gli dà accesso al vostro Dolibarr: anagrafiche, fatture, articoli, ordini, progetti e documenti. Ponete le domande e date le istruzioni nell'assistente che già conoscete, e questo lavora direttamente nel vostro ERP.</p>
+
+<p>Nessun nuovo assistente da imparare, nessuna interfaccia aggiuntiva: mantenete lo strumento che usate già.</p>
+
+<hr>
+
+<h3>⚡ Tre passaggi ed è fatta</h3>
+<ol>
+  <li><strong>Installate e attivate il modulo</strong>, come qualsiasi altro modulo Dolibarr.</li>
+  <li><strong>Impostate i permessi</strong> dell'utente per conto del quale agirà l'assistente. La configurazione finisce qui: l'assistente eredita esattamente quei diritti.</li>
+  <li><strong>Aggiungete il connettore</strong> nel vostro client IA incollando l'URL mostrato dal modulo.</li>
+</ol>
+<p>La pagina di configurazione vi fornisce URL, comando e file di configurazione pronti da copiare, a seconda del client utilizzato. Bastano pochi minuti.</p>
+
+<h3>🔌 Compatibile con i client che già usate</h3>
+<ul>
+  <li><strong>claude.ai</strong> (web e applicazione) — connettore personalizzato con autenticazione OAuth: accedete con il vostro account Dolibarr e date il consenso. Nessuna chiave da copiare.</li>
+  <li><strong>Claude Code</strong> — un solo comando.</li>
+  <li><strong>API Anthropic</strong> e qualsiasi <strong>client MCP</strong> con trasporto HTTP.</li>
+</ul>
+
+<h3>💬 Che cosa può fare il vostro assistente</h3>
+<p>Una ventina di strumenti coprono il lavoro quotidiano in Dolibarr:</p>
+<ul>
+  <li><strong>Consultare e cercare</strong> — «Quali fatture di questo cliente sono insolute?», «Trova l'ordine della settimana scorsa per Dupont»</li>
+  <li><strong>Creare e modificare</strong> — anagrafiche, preventivi, fatture, ordini, articoli, progetti, con le relative righe</li>
+  <li><strong>Concatenare le azioni di business</strong> — validare un preventivo, trasformarlo in ordine, generare il PDF</li>
+  <li><strong>Gestire i documenti</strong> — elencare, caricare, scaricare, generare i PDF dai vostri modelli Dolibarr</li>
+  <li><strong>Lavorare con i campi personalizzati</strong>, i contatti collegati e la rendicontazione del tempo</li>
+</ul>
+<p>Gli strumenti passano dall'API REST di Dolibarr: ciò che il vostro assistente può vedere e fare corrisponde esattamente a ciò che l'utente collegato può vedere e fare nell'interfaccia.</p>
+
+<h3>🔒 Comandano i vostri permessi Dolibarr</h3>
+<p>È il principio di fondo del modulo. L'assistente non ha diritti propri: agisce per conto di un utente Dolibarr, con i suoi permessi, modulo per modulo. Volete un assistente in sola lettura per la contabilità? Create un utente in sola lettura. Volete che possa emettere fatture ma non veda mai gli stipendi? È un'impostazione di permessi, quella che già padroneggiate.</p>
+<p>L'autenticazione avviene tramite OAuth 2.1 (con PKCE e rotazione dei token) oppure con una chiave API a seconda del client, e potete revocare un accesso in qualsiasi momento.</p>
+
+<h3>📊 Query SQL in sola lettura — opzionale, disattivato per impostazione predefinita</h3>
+<p>Per le analisi che l'API REST non copre — aggregati su più anni, incroci di tabelle, cruscotti su misura — il modulo può aprire un accesso SQL <strong>rigorosamente in lettura</strong>. Arriva spento ed è protetto da più blocchi indipendenti:</p>
+<ul>
+  <li>un interruttore globale, spento all'installazione;</li>
+  <li>un permesso Dolibarr, che per impostazione predefinita non ha nessuno;</li>
+  <li>una convalida nominativa, utente per utente;</li>
+  <li>una protezione specifica per gli ambienti multi-azienda.</li>
+</ul>
+<p>Finché manca anche una sola di queste condizioni, gli strumenti SQL non compaiono nemmeno nell'elenco degli strumenti del client.</p>
+<p>Ogni query passa da un lexer e da un parser SQL prima di raggiungere il server: passano solo le istruzioni di lettura. Scritture, comandi di struttura, istruzioni multiple e colonne di password o chiavi vengono rifiutate, anche quando una parola chiave di scrittura è nascosta dentro una stringa di testo. Join, sottoquery, UNION e aggregati funzionano normalmente. Numero di righe, durata e dimensione della risposta sono limitati, e ogni query viene registrata.</p>
+
+<h3>🛠️ Niente da ospitare, niente da sorvegliare</h3>
+<p>emMCP funziona dentro il vostro Dolibarr esistente, come qualsiasi pagina PHP. Nessun servizio da avviare, nessuna porta da aprire, nessun container da mantenere. Se il vostro Dolibarr risponde, risponde anche il vostro server MCP.</p>
+
+<h3>⚙️ Requisiti</h3>
+<ul>
+  <li>Dolibarr 16 o successivo, PHP 8.1 o successivo</li>
+  <li>Modulo <strong>API REST</strong> di Dolibarr attivo</li>
+  <li>Accesso HTTPS alla vostra istanza dal client IA</li>
+  <li>Un account presso il fornitore IA che preferite — il modulo non aggiunge alcun abbonamento proprio</li>
+</ul>
+
+<h3>📚 Per saperne di più</h3>
+<p>Presentazione dettagliata, guida alla connessione e casi d'uso: <a href="https://www.e-dem.com/it/produits/emmcp">www.e-dem.com/it/produits/emmcp</a></p>
+
+<h3>🤝 Assistenza</h3>
+<p>Assistenza e aggiornamenti a cura di E-dem. Domande prima dell'acquisto? Scriveteci, rispondiamo.</p>

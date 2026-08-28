@@ -1,0 +1,80 @@
+<!-- emMCP — Description Dolistore — Français -->
+
+<!-- ============================================ -->
+<!-- DESCRIPTION COURTE (max 400 caractères)      -->
+<!-- 372 caractères                               -->
+<!-- ============================================ -->
+<!--
+Connectez votre assistant IA directement à votre Dolibarr. emMCP expose votre ERP comme serveur MCP : ajoutez le connecteur dans claude.ai, Claude Code ou tout client compatible, et dialoguez avec vos données. Chaque action respecte les permissions Dolibarr de l'utilisateur connecté. Installation en quelques minutes, aucun service à héberger.
+-->
+
+
+<!-- ============================================ -->
+<!-- DESCRIPTION LONGUE (HTML)                    -->
+<!-- ============================================ -->
+
+<h2>emMCP — Connectez votre assistant IA à votre Dolibarr</h2>
+
+<p>Vous utilisez déjà un assistant IA au quotidien. <strong>emMCP</strong> lui donne accès à votre Dolibarr : vos tiers, vos factures, vos produits, vos commandes, vos projets, vos documents. Vous posez vos questions et donnez vos instructions dans votre assistant habituel, et il travaille directement dans votre ERP.</p>
+
+<p>Aucun assistant à apprendre, aucune interface supplémentaire : vous gardez l'outil que vous utilisez déjà.</p>
+
+<hr>
+
+<h3>⚡ Trois étapes, et c'est parti</h3>
+<ol>
+  <li><strong>Installez et activez le module</strong> comme n'importe quel module Dolibarr.</li>
+  <li><strong>Réglez les permissions</strong> de l'utilisateur qui sera associé à l'assistant. C'est tout le paramétrage : l'assistant héritera exactement de ses droits.</li>
+  <li><strong>Ajoutez le connecteur</strong> dans votre client IA en collant l'URL affichée par le module.</li>
+</ol>
+<p>La page de configuration vous donne l'URL, la commande et le fichier de configuration prêts à copier, selon le client que vous utilisez. Comptez quelques minutes.</p>
+
+<h3>🔌 Compatible avec les clients que vous utilisez déjà</h3>
+<ul>
+  <li><strong>claude.ai</strong> (web et application) — connecteur personnalisé avec authentification OAuth : vous vous connectez avec votre compte Dolibarr et donnez votre consentement. Aucune clé à copier-coller.</li>
+  <li><strong>Claude Code</strong> — une seule commande à exécuter.</li>
+  <li><strong>API Anthropic</strong> et tout <strong>client MCP</strong> acceptant le transport HTTP.</li>
+</ul>
+
+<h3>💬 Ce que votre assistant peut faire</h3>
+<p>Une vingtaine d'outils couvrent le quotidien de Dolibarr :</p>
+<ul>
+  <li><strong>Consulter et chercher</strong> — « Quelles factures de ce client sont impayées ? », « Retrouve la commande de la semaine dernière pour Dupont »</li>
+  <li><strong>Créer et modifier</strong> — tiers, devis, factures, commandes, produits, projets, avec leurs lignes</li>
+  <li><strong>Enchaîner les actions métier</strong> — valider un devis, le transformer en commande, générer le PDF</li>
+  <li><strong>Gérer les documents</strong> — lister, téléverser, télécharger, générer les PDF depuis les modèles Dolibarr</li>
+  <li><strong>Travailler avec vos champs personnalisés</strong>, vos contacts liés, votre suivi de temps</li>
+</ul>
+<p>Les outils passent par l'API REST de Dolibarr : ce que votre assistant peut voir et faire correspond exactement à ce que l'utilisateur associé peut voir et faire dans l'interface.</p>
+
+<h3>🔒 Vos permissions Dolibarr font foi</h3>
+<p>C'est le principe de fond du module. L'assistant n'a pas de droits propres : il agit au nom d'un utilisateur Dolibarr, avec ses permissions, module par module. Vous voulez un assistant en lecture seule pour la comptabilité ? Créez un utilisateur en lecture seule. Vous voulez qu'il puisse créer des factures mais pas toucher aux salaires ? C'est un réglage de permissions, celui que vous maîtrisez déjà.</p>
+<p>L'authentification se fait par OAuth 2.1 (avec PKCE et rotation des jetons) ou par clé API selon le client, et vous pouvez révoquer un accès à tout moment.</p>
+
+<h3>📊 Requêtes SQL en lecture seule — en option, désactivé par défaut</h3>
+<p>Pour les analyses que l'API REST ne couvre pas — agrégats sur plusieurs années, croisements de tables, tableaux de bord sur mesure — le module peut ouvrir un accès SQL <strong>strictement en lecture</strong>. Il est éteint par défaut et protégé par plusieurs verrous indépendants :</p>
+<ul>
+  <li>un interrupteur global, éteint à l'installation ;</li>
+  <li>une permission Dolibarr, accordée à personne par défaut ;</li>
+  <li>une validation nominative, utilisateur par utilisateur ;</li>
+  <li>un garde-fou spécifique aux environnements multi-sociétés.</li>
+</ul>
+<p>Tant qu'une seule de ces conditions manque, les outils SQL n'apparaissent même pas dans la liste des outils du client.</p>
+<p>Chaque requête est analysée par un lexeur et un analyseur syntaxique SQL avant d'atteindre le serveur : seules les requêtes de consultation passent. Les écritures, les commandes de structure, les instructions multiples et les colonnes de mots de passe ou de clés sont refusées — y compris quand un mot-clé d'écriture est dissimulé dans une chaîne de caractères. Les jointures, sous-requêtes, UNION et agrégats fonctionnent normalement. Nombre de lignes, durée et taille de réponse sont plafonnés, et chaque requête est journalisée.</p>
+
+<h3>🛠️ Rien à héberger, rien à surveiller</h3>
+<p>emMCP fonctionne dans votre Dolibarr existant, comme n'importe quelle page PHP. Pas de service à lancer, pas de port à ouvrir, pas de conteneur à maintenir. Si votre Dolibarr répond, votre serveur MCP répond.</p>
+
+<h3>⚙️ Prérequis</h3>
+<ul>
+  <li>Dolibarr 16 ou supérieur, PHP 8.1 ou supérieur</li>
+  <li>Le module <strong>API REST</strong> de Dolibarr activé</li>
+  <li>Un accès HTTPS à votre instance depuis le client IA</li>
+  <li>Un compte auprès du fournisseur d'IA de votre choix — le module ne facture aucun abonnement supplémentaire</li>
+</ul>
+
+<h3>📚 En savoir plus</h3>
+<p>Présentation détaillée, guide de connexion et cas d'usage : <a href="https://www.e-dem.com/fr/produits/emmcp">www.e-dem.com/fr/produits/emmcp</a></p>
+
+<h3>🤝 Support</h3>
+<p>Support et mises à jour assurés par E-dem. Une question avant l'achat ? Écrivez-nous, nous répondons.</p>
