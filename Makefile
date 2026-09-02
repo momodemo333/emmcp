@@ -119,7 +119,7 @@ REQUIRED_RUNTIME_TAG ?=
 
 check-runtime:
 	@test -d "$(MCP_PACKAGE_SRC)" || (echo "$(RED)MCP package source not found: $(MCP_PACKAGE_SRC)$(NC)" && exit 1)
-	@actual=$$(grep -oE "setServerInfo\('Dolibarr MCP Server', '[^']+'" $(MCP_PACKAGE_SRC)/src/Bootstrap.php | grep -oE "'[0-9][^']*'$$" | tr -d "'"); \
+	@actual=$$(grep -oE "const SERVER = '[^']+'" $(MCP_PACKAGE_SRC)/src/Config/Version.php | grep -oE "'[0-9][^']*'$$" | tr -d "'"); \
 	if [ "$$actual" != "$(EXPECTED_RUNTIME_VERSION)" ]; then \
 		echo "$(RED)Runtime version mismatch: expected $(EXPECTED_RUNTIME_VERSION), found $$actual$(NC)"; \
 		echo "$(YELLOW)Point MCP_PACKAGE_SRC at the right checkout, or set EXPECTED_RUNTIME_VERSION.$(NC)"; \
