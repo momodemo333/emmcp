@@ -89,7 +89,7 @@ lint:
 # bundle. The build refuses to package anything else: the package is a separate
 # repository, so without this the ZIP silently carries whatever happens to be
 # checked out — a work-in-progress branch, or a stale tree.
-EXPECTED_RUNTIME_VERSION ?= 2.5.0
+EXPECTED_RUNTIME_VERSION ?= 2.5.1
 
 # Same for the shared OAuth library: it is a third separate repository, and the
 # build would otherwise bundle whatever is checked out beside it.

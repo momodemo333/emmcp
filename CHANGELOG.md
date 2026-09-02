@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.1] - 2026-09-02
+
+### Fixed
+- **`CAST(x AS DECIMAL(20,6))` was refused as a syntax error** by the read-only
+  SQL tool. `CAST` itself worked — `DECIMAL(20)` and `CHAR(10)` went through —
+  the comma inside the type parameters did not, which made formatting amounts
+  with a scale impossible. Types with a scale are accepted now, including
+  inside aggregates and `CONVERT`. Everything else still fails closed.
+
 ## [1.4.0] - 2026-09-02
 
 ### Added
