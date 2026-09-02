@@ -251,8 +251,12 @@ $sessionDir = DOL_DATA_ROOT.'/emmcp/sessions';
 // are not even discovered, so they never reach tools/list.
 $sqlCapability = emmcpBuildSqlCapability($db, $conf, $apiKey);
 
+// Lets the agent ask what it is connected to instead of guessing — Dolibarr
+// version, enabled modules, and whether SQL is available in this session.
+$environment = emmcp_mcp_environment($sqlCapability !== null);
+
 try {
-	$response = DolibarrMcp\Bootstrap::handleHttpRequest(null, $sessionDir, $config, $sqlCapability);
+	$response = DolibarrMcp\Bootstrap::handleHttpRequest(null, $sessionDir, $config, $sqlCapability, $environment);
 	DolibarrMcp\Bootstrap::emit($response);
 } catch (Throwable $e) {
 	// The detail stays on the server: exception messages here routinely carry

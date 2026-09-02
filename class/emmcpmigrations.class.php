@@ -38,7 +38,7 @@ class EmmcpMigrations
 	 * Must be bumped together with $this->version in the module descriptor.
 	 * Forgetting one of the two silently stops migrations from running.
 	 */
-	const MODULE_VERSION = '1.3.3';
+	const MODULE_VERSION = '1.4.0';
 
 	const VERSION_CONSTANT = 'EMMCP_DB_VERSION';
 
