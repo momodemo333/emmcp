@@ -38,7 +38,7 @@ class EmmcpMigrations
 	 * Must be bumped together with $this->version in the module descriptor.
 	 * Forgetting one of the two silently stops migrations from running.
 	 */
-	const MODULE_VERSION = '1.4.1';
+	const MODULE_VERSION = '1.5.0';
 
 	const VERSION_CONSTANT = 'EMMCP_DB_VERSION';
 
@@ -262,6 +262,28 @@ class EmmcpMigrations
 			// declared there must be created here too for existing databases.
 			"ALTER TABLE ".$p."emmcp_sql_permissions ADD CONSTRAINT fk_emmcp_sql_perm_user"
 				." FOREIGN KEY (fk_user) REFERENCES ".$p."user (rowid) ON DELETE CASCADE",
+
+			// 1.5.0 — MCP call log. Backs both the audit trail and the rate
+			// limiter, which counts these same rows so the number it enforces
+			// and the trail an administrator reads cannot disagree.
+			"CREATE TABLE IF NOT EXISTS ".$p."emmcp_mcp_log(
+				rowid integer AUTO_INCREMENT PRIMARY KEY,
+				entity integer DEFAULT 1 NOT NULL,
+				fk_user integer NOT NULL,
+				date_creation datetime NOT NULL,
+				method varchar(64) NOT NULL,
+				tool_name varchar(128) NULL,
+				arguments text NULL,
+				duration_ms integer DEFAULT 0 NOT NULL,
+				success tinyint DEFAULT 1 NOT NULL,
+				error_message varchar(255) NULL,
+				client_name varchar(128) NULL
+			) ENGINE=innodb",
+
+			// Covers the rate-limit count, which runs on every call and is the
+			// one query that must not degrade as the table grows.
+			"ALTER TABLE ".$p."emmcp_mcp_log ADD INDEX idx_emmcp_mcp_log_user_date (entity, fk_user, date_creation)",
+			"ALTER TABLE ".$p."emmcp_mcp_log ADD INDEX idx_emmcp_mcp_log_date (date_creation)",
 		);
 	}
 

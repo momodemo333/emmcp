@@ -255,10 +255,91 @@ $sqlCapability = emmcpBuildSqlCapability($db, $conf, $apiKey);
 // version, enabled modules, and whether SQL is available in this session.
 $environment = emmcp_mcp_environment($sqlCapability !== null);
 
+// --- Audit, rate limit and alerting ------------------------------------------
+//
+// The body is read here rather than left to the SDK because we need to know
+// what is being asked BEFORE dispatching: a rate limit applied afterwards caps
+// nothing. It is then handed to the transport explicitly, since php://input
+// cannot be read twice.
+$rawBody = file_get_contents('php://input');
+$rawBody = $rawBody === false ? '' : $rawBody;
+
+$audit = null;
+$call = array('method' => 'unknown', 'tool' => null, 'arguments' => null, 'client' => null);
+if (emmcp_mcp_audit_autoload() !== null) {
+	$audit = new \DolibarrMcpAudit\McpAudit($db, emmcp_mcp_audit_config());
+	$call = \DolibarrMcpAudit\McpAudit::describeRequest($rawBody);
+}
+
+// The user the agent acts as. Resolved once: the audit trail names a person,
+// not a key, and the limit counts per person.
+$mcpUserId = emmcpResolveUserIdFromApiKey($db, $apiKey);
+$mcpLogin = '';
+if ($mcpUserId > 0) {
+	$tmpUser = new User($db);
+	if ($tmpUser->fetch($mcpUserId) > 0) {
+		$mcpLogin = (string) $tmpUser->login;
+	}
+}
+
+// Only tool calls are capped. Refusing initialize or tools/list would break the
+// client outright while stopping no data from leaving.
+if ($audit !== null && $mcpUserId > 0 && $call['method'] === 'tools/call') {
+	$decision = $audit->check($mcpUserId);
+	if (!$decision->allowed) {
+		$audit->record(
+			$mcpUserId,
+			$mcpLogin,
+			$call['method'],
+			$call['tool'],
+			$call['arguments'],
+			0,
+			false,
+			'rate limit reached',
+			$call['client']
+		);
+		dol_syslog('[EMMCP] MCP rate limit reached for user '.$mcpLogin, LOG_WARNING);
+		emmcp_error(429, -32000, $decision->message());
+	}
+}
+
+$startedAt = microtime(true);
+
 try {
-	$response = DolibarrMcp\Bootstrap::handleHttpRequest(null, $sessionDir, $config, $sqlCapability, $environment);
+	$request = \GuzzleHttp\Psr7\ServerRequest::fromGlobals()
+		->withBody(\GuzzleHttp\Psr7\Utils::streamFor($rawBody));
+
+	$response = DolibarrMcp\Bootstrap::handleHttpRequest($request, $sessionDir, $config, $sqlCapability, $environment);
+
+	if ($audit !== null && $mcpUserId > 0) {
+		$audit->record(
+			$mcpUserId,
+			$mcpLogin,
+			$call['method'],
+			$call['tool'],
+			$call['arguments'],
+			(int) round((microtime(true) - $startedAt) * 1000),
+			$response->getStatusCode() < 400,
+			$response->getStatusCode() >= 400 ? 'HTTP '.$response->getStatusCode() : null,
+			$call['client']
+		);
+	}
+
 	DolibarrMcp\Bootstrap::emit($response);
 } catch (Throwable $e) {
+	if ($audit !== null && $mcpUserId > 0) {
+		$audit->record(
+			$mcpUserId,
+			$mcpLogin,
+			$call['method'],
+			$call['tool'],
+			$call['arguments'],
+			(int) round((microtime(true) - $startedAt) * 1000),
+			false,
+			substr($e->getMessage(), 0, 255),
+			$call['client']
+		);
+	}
 	// The detail stays on the server: exception messages here routinely carry
 	// file paths, database host names and account names, and this response goes
 	// to a remote MCP client.
