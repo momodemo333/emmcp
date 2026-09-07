@@ -312,6 +312,16 @@ try {
 	$response = DolibarrMcp\Bootstrap::handleHttpRequest($request, $sessionDir, $config, $sqlCapability, $environment);
 
 	if ($audit !== null && $mcpUserId > 0) {
+		// A failed tool answers 200 with the error inside the payload, so the
+		// body has to be read to tell a real success from a refusal. Rewound
+		// afterwards: emit() streams the same body to the client.
+		$payload = (string) $response->getBody();
+		$response->getBody()->rewind();
+
+		$failure = $response->getStatusCode() >= 400
+			? 'HTTP '.$response->getStatusCode()
+			: \DolibarrMcpAudit\McpAudit::failureReason($payload);
+
 		$audit->record(
 			$mcpUserId,
 			$mcpLogin,
@@ -319,8 +329,8 @@ try {
 			$call['tool'],
 			$call['arguments'],
 			(int) round((microtime(true) - $startedAt) * 1000),
-			$response->getStatusCode() < 400,
-			$response->getStatusCode() >= 400 ? 'HTTP '.$response->getStatusCode() : null,
+			$failure === null,
+			$failure,
 			$call['client']
 		);
 	}

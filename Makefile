@@ -22,6 +22,8 @@ LIB_OAUTH_SRC ?= ../../../../../dolibarr-mcp-oauth
 # Source of the embedded dolibarr-mcp-sql library (read-only SQL over MCP),
 # shared with Dalfred. Overridable: make build-release LIB_SQL_SRC=/path/…
 LIB_SQL_SRC ?= ../../../../../dolibarr-mcp-sql
+# Source of the embedded dolibarr-mcp-audit library, shared with Dalfred.
+LIB_AUDIT_SRC ?= ../../../../../dolibarr-mcp-audit
 
 # Extract version from the module descriptor
 VERSION := $(shell grep -oP "\\\$$this->version\s*=\s*'\K[^']+" $(MODULE_FILE))
@@ -38,6 +40,10 @@ CRITICAL_FILES := mcp.php oauth.php .htaccess \
 	sql/llx_emmcp_sql_permissions.sql \
 	class/emmcpmigrations.class.php \
 	vendor/dolibarr-mcp-sql/src/SqlCapability.php \
+	vendor/dolibarr-mcp-audit/src/McpAudit.php \
+	vendor/dolibarr-mcp-audit/src/CallLog.php \
+	admin/mcp_activity.php \
+	sql/llx_emmcp_mcp_log.sql \
 	vendor/dolibarr-mcp-sql/src/SqlGateway.php \
 	vendor/dolibarr-mcp-sql/src/SqlPermissions.php \
 	vendor/dolibarr-mcp-sql/src/SqlAudit.php \
@@ -200,6 +206,14 @@ build-release: check-runtime check-oauth
 	@mkdir -p $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-sql
 	@cp -r $(LIB_SQL_SRC)/src $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-sql/
 	@cp $(LIB_SQL_SRC)/composer.json $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-sql/
+
+	# Same for dolibarr-mcp-audit: without it the endpoint runs unlogged and
+	# uncapped, and does so silently.
+	@echo "[3c/7] Bundling dolibarr-mcp-audit library..."
+	@test -d "$(LIB_AUDIT_SRC)/src" || (echo "$(RED)dolibarr-mcp-audit source not found: $(LIB_AUDIT_SRC)$(NC)" && exit 1)
+	@mkdir -p $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-audit
+	@cp -r $(LIB_AUDIT_SRC)/src $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-audit/
+	@cp $(LIB_AUDIT_SRC)/composer.json $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-audit/
 
 	@echo "[4/7] Installing production Composer dependencies (--no-dev)..."
 	@cd $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server && \
