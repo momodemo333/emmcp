@@ -105,7 +105,7 @@ EXPECTED_RUNTIME_VERSION ?= 2.5.1
 # still accept an arbitrary commit that merely happens to be clean. HEAD must
 # be the tag itself. Set EXPECTED_OAUTH_COMMIT to accept a specific untagged
 # commit instead — explicitly, never by default.
-EXPECTED_OAUTH_VERSION ?= 1.0.0
+EXPECTED_OAUTH_VERSION ?= 1.0.1
 EXPECTED_OAUTH_COMMIT ?=
 
 # Fixed timestamp for every entry in the ZIP. Any constant works; what matters
