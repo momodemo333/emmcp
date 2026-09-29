@@ -7,7 +7,8 @@ Tout le contenu ci-dessous est rédigé pour être publié tel quel ou adapté.
   (et `/en/`, `/de/`, `/es/`, `/it/` — le segment `produits` reste en français,
   comme pour Dalfred)
 - **Prix affiché** : 15 € HT, achat unique via le DoliStore
-- **Lien d'achat** : fiche DoliStore du module (à renseigner une fois créée)
+- **Lien d'achat** : https://www.dolistore.com/product.php?id=3420
+  (fiche validée et en ligne depuis le 29/09/2026)
 - **Module lié** : Dalfred — proposer un renvoi croisé entre les deux pages
 - **Aucun numéro de version** ne doit apparaître : la page ne doit pas être
   retouchée à chaque publication.
@@ -103,6 +104,22 @@ Chaque requête est analysée avant d'atteindre le serveur : seules les
 consultations passent, les écritures sont refusées, les colonnes sensibles sont
 hors de portée, et tout est journalisé.
 
+### Le journal d'activité
+
+Argument à ne pas négliger sur la page : c'est ce que demande un acheteur qui a
+une question de conformité.
+
+Les permissions Dolibarr disent *ce qu'*un utilisateur peut lire ; elles ne
+disent rien sur *combien*. Un commercial autorisé à consulter ses clients un par
+un n'est pas censé aspirer tout le fichier en une après-midi.
+
+- **Journal des appels** — qui, quel outil, quels paramètres, durée, résultat.
+  Les réponses ne sont jamais stockées ; les paramètres peuvent être désactivés.
+- **Quota par utilisateur** sur une fenêtre glissante, avec un refus chiffré que
+  l'assistant sait interpréter.
+- **Alerte par courriel** quand le volume d'un utilisateur sort de l'ordinaire.
+- **Purge automatique**, 90 jours par défaut.
+
 ---
 
 ## Ce qu'il n'y a pas à faire
@@ -140,8 +157,24 @@ Et sur la page Dalfred, l'encart symétrique renvoyant vers emMCP.
 
 Dans `marketing/screenshots/` du dépôt du module :
 
-- `emmcp_admin_setup.png` — page de configuration avec l'URL du connecteur
+- `emmcp_activity_log.png` — **le visuel le plus parlant** : le tableau des
+  appels réellement reçus (date, utilisateur, outil, durée, état, paramètres).
+  C'est le seul qui montre le module en fonctionnement plutôt que configuré.
+- `emmcp_admin_setup.png` — page de configuration : URL du connecteur, commande
+  Claude Code et `mcp.json`, chacun avec son bouton de copie
+- `emmcp_oauth_consent.png` — l'écran de consentement OAuth vu par l'utilisateur
+  quand claude.ai demande l'accès
+- `emmcp_activity_full.png` — la page d'activité entière, avec les réglages de
+  rétention, de quota et d'alerte au-dessus du tableau
 - `emmcp_admin_sql_access.png` — écran de l'accès SQL en lecture seule
+
+Toutes en 1440 px de large, captures desktop. Détail et légendes suggérées dans
+`marketing/screenshots/SCREENSHOTS.md`.
+
+**Manquent, et seul Morgan peut les produire** (elles demandent son compte
+claude.ai) : le connecteur en cours d'ajout dans claude.ai, et une vraie
+conversation où l'assistant répond avec des données Dolibarr. Ce sont les deux
+plus convaincantes ; prévoir leur emplacement sur la page.
 
 Une image de couverture reste à produire — voir
 `marketing/prompt-image-couverture.md`.
@@ -156,3 +189,39 @@ Une image de couverture reste à produire — voir
   Dolibarr font foi. Installation en quelques minutes.
 - **Mots-clés** : MCP Dolibarr, connecteur IA Dolibarr, Claude Dolibarr,
   serveur MCP ERP, assistant IA ERP
+
+
+---
+
+## Documentation à créer sur le site
+
+Demande distincte de la page produit : une page de documentation, du même
+niveau que celle des autres modules E-dem.
+
+Le contenu source est dans le dépôt du module et n'a pas à être réinventé :
+
+- `README.md` — installation, configuration, dépannage
+- `marketing/dolistore/description_fr.html` — la description complète, à jour
+  au 29/09/2026 (les cinq langues sont alignées)
+- `CHANGELOG.md` — l'historique, utile pour une section « nouveautés »
+- `marketing/screenshots/SCREENSHOTS.md` — ce que montre chaque capture
+
+Points à couvrir en priorité, dans cet ordre — c'est celui des questions
+réellement posées :
+
+1. **Connecter claude.ai** — ajouter un connecteur personnalisé, coller l'URL,
+   l'écran de consentement. Aucune clé à copier.
+2. **Connecter Claude Code** — la commande, et où trouver sa clé API Dolibarr
+   (fiche utilisateur → onglet « Clé pour API »).
+3. **Régler les permissions** — le point le plus important et le plus mal
+   compris : l'assistant hérite exactement des droits de l'utilisateur lié.
+4. **L'en-tête `Authorization` sur hébergement mutualisé** — sur Apache en
+   CGI/FPM il est supprimé, et le seul symptôme est une erreur 401 après une
+   connexion réussie. Donner les directives (`CGIPassAuth On`, ou l'équivalent
+   nginx). C'est la première cause de ticket.
+5. **L'accès SQL** — les quatre verrous, et pourquoi il est éteint par défaut.
+6. **Le journal d'activité** — lire le journal, régler le quota et l'alerte.
+
+Prévoir les renvois croisés avec la documentation de Dalfred : les deux modules
+partagent le même serveur MCP embarqué, et un client qui hésite entre les deux
+cherche souvent la différence dans la documentation.
