@@ -62,6 +62,15 @@ Verbinden Sie Ihren KI-Assistenten direkt mit Ihrem Dolibarr. emMCP stellt Ihr E
 <p>Solange auch nur eine dieser Bedingungen fehlt, erscheinen die SQL-Werkzeuge nicht einmal in der Werkzeugliste des Clients.</p>
 <p>Jede Abfrage durchläuft einen Lexer und einen SQL-Parser, bevor sie den Server erreicht: Nur lesende Anweisungen kommen durch. Schreibzugriffe, Strukturbefehle, mehrere Anweisungen sowie Passwort- und Schlüsselspalten werden abgelehnt — auch dann, wenn ein Schreib-Schlüsselwort in einer Zeichenkette versteckt ist. Joins, Unterabfragen, UNION und Aggregate funktionieren normal. Zeilenzahl, Laufzeit und Antwortgröße sind begrenzt, und jede Abfrage wird protokolliert.</p>
 
+<h3>📋 Wissen, was der Assistent eingesehen hat</h3>
+<p>Dolibarr-Berechtigungen sagen, <em>was</em> ein Benutzer lesen darf; sie sagen nichts darüber, <em>wie viel</em>. Wer Kunden einzeln nachschlagen darf, darf deshalb noch lange nicht den gesamten Kundenstamm an einem Nachmittag abziehen. Das Modul schließt diese Lücke in einem eigenen Reiter.</p>
+<ul>
+  <li><strong>Aufrufprotokoll</strong> — eine Zeile pro Aufruf: wer, welches Werkzeug, mit welchen Parametern, Dauer und Ergebnis. Die <em>Antworten</em> werden nie gespeichert; die Parameter schon, denn sie machen einen Aufruf überhaupt nachvollziehbar, und sie lassen sich abschalten, wenn Ihre Richtlinie das verlangt.</li>
+  <li><strong>Kontingent pro Benutzer</strong> — eine Obergrenze für Werkzeugaufrufe in einem gleitenden Zeitfenster. Eine Ablehnung antwortet dem Assistenten mit verwertbaren Zahlen statt mit einem undurchsichtigen Fehler. Nur Werkzeugaufrufe zählen: Verbinden und Auflisten der Werkzeuge verbrauchen nichts.</li>
+  <li><strong>E-Mail-Warnung</strong> — meldet einem Administrator, wenn das Volumen eines Benutzers auffällt, mit einer Sperrfrist, damit eine intensive Sitzung eine Nachricht auslöst und nicht fünfzig.</li>
+  <li><strong>Automatische Bereinigung</strong> — konfigurierbare Aufbewahrung, standardmäßig 90 Tage.</li>
+</ul>
+
 <h3>🛠️ Nichts zu hosten, nichts zu überwachen</h3>
 <p>emMCP läuft in Ihrem bestehenden Dolibarr wie jede PHP-Seite. Kein Dienst zu starten, kein Port zu öffnen, kein Container zu pflegen. Wenn Ihr Dolibarr antwortet, antwortet Ihr MCP-Server.</p>
 

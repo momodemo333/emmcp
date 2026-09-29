@@ -62,6 +62,15 @@ Connect your AI assistant straight to your Dolibarr. emMCP exposes your ERP as a
 <p>While any one of those is missing, the SQL tools do not even appear in the client's tool list.</p>
 <p>Every query goes through a lexer and a SQL parser before reaching the server: only read statements pass. Writes, schema commands, multiple statements and password or key columns are refused — including when a write keyword is hidden inside a string literal. Joins, subqueries, UNION and aggregates work normally. Row count, duration and response size are capped, and every query is recorded.</p>
 
+<h3>📋 Knowing what the assistant looked at</h3>
+<p>Dolibarr permissions say <em>what</em> a user may read; they say nothing about <em>how much</em>. Someone entitled to look up customers one at a time is not thereby entitled to pull the whole customer base in an afternoon. The module fills that gap, in a tab of its own.</p>
+<ul>
+  <li><strong>Call log</strong> — one row per call: who, which tool, with which arguments, how long it took and how it ended. Tool <em>results</em> are never stored; arguments are, since they are what makes a call auditable, and they can be switched off if your policy requires it.</li>
+  <li><strong>Per-user rate limit</strong> — a cap on tool calls over a rolling window. A refusal answers the assistant with numbers it can act on rather than an opaque error. Only tool calls count: connecting and listing the tools consume nothing.</li>
+  <li><strong>Email alert</strong> — warns an administrator when one user's volume stands out, with a cooldown so an intensive session sends one message rather than fifty.</li>
+  <li><strong>Automatic purge</strong> — configurable retention, 90 days by default.</li>
+</ul>
+
 <h3>🛠️ Nothing to host, nothing to watch</h3>
 <p>emMCP runs inside your existing Dolibarr, like any PHP page. No service to start, no port to open, no container to maintain. If your Dolibarr answers, your MCP server answers.</p>
 

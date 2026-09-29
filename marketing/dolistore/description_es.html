@@ -62,6 +62,15 @@ Conecte su asistente de IA directamente a su Dolibarr. emMCP expone su ERP como 
 <p>Mientras falte una sola de esas condiciones, las herramientas SQL ni siquiera aparecen en la lista de herramientas del cliente.</p>
 <p>Cada consulta pasa por un analizador léxico y un analizador sintáctico SQL antes de llegar al servidor: solo pasan las consultas de lectura. Las escrituras, los comandos de estructura, las instrucciones múltiples y las columnas de contraseñas o claves se rechazan, incluso cuando una palabra clave de escritura se esconde dentro de una cadena de texto. Las uniones, subconsultas, UNION y agregados funcionan con normalidad. El número de filas, la duración y el tamaño de la respuesta están limitados, y cada consulta queda registrada.</p>
 
+<h3>📋 Saber qué ha consultado el asistente</h3>
+<p>Los permisos de Dolibarr dicen <em>qué</em> puede leer un usuario; no dicen nada sobre <em>cuánto</em>. Quien está autorizado a consultar clientes de uno en uno no lo está por ello a descargar todo el fichero en una tarde. El módulo cubre esa carencia, en una pestaña propia.</p>
+<ul>
+  <li><strong>Registro de llamadas</strong> — una línea por llamada: quién, qué herramienta, con qué parámetros, duración y resultado. Las <em>respuestas</em> nunca se almacenan; los parámetros sí, porque son los que hacen que una llamada sea verificable, y pueden desactivarse si su política lo exige.</li>
+  <li><strong>Cupo por usuario</strong> — un límite de llamadas a herramientas en una ventana deslizante. Un rechazo responde al asistente con cifras utilizables en lugar de un error opaco. Solo cuentan las llamadas a herramientas: conectarse y listar las herramientas no consume nada.</li>
+  <li><strong>Alerta por correo</strong> — avisa a un administrador cuando el volumen de un usuario destaca, con un tiempo de espera para que una sesión intensiva envíe un mensaje y no cincuenta.</li>
+  <li><strong>Purga automática</strong> — retención configurable, 90 días por defecto.</li>
+</ul>
+
 <h3>🛠️ Nada que alojar, nada que vigilar</h3>
 <p>emMCP funciona dentro de su Dolibarr existente, como cualquier página PHP. Ningún servicio que arrancar, ningún puerto que abrir, ningún contenedor que mantener. Si su Dolibarr responde, su servidor MCP responde.</p>
 

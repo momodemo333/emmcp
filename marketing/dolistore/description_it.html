@@ -62,6 +62,15 @@ Collegate il vostro assistente IA direttamente al vostro Dolibarr. emMCP espone 
 <p>Finché manca anche una sola di queste condizioni, gli strumenti SQL non compaiono nemmeno nell'elenco degli strumenti del client.</p>
 <p>Ogni query passa da un lexer e da un parser SQL prima di raggiungere il server: passano solo le istruzioni di lettura. Scritture, comandi di struttura, istruzioni multiple e colonne di password o chiavi vengono rifiutate, anche quando una parola chiave di scrittura è nascosta dentro una stringa di testo. Join, sottoquery, UNION e aggregati funzionano normalmente. Numero di righe, durata e dimensione della risposta sono limitati, e ogni query viene registrata.</p>
 
+<h3>📋 Sapere che cosa ha consultato l'assistente</h3>
+<p>I permessi di Dolibarr dicono <em>che cosa</em> un utente può leggere; non dicono nulla su <em>quanto</em>. Chi è autorizzato a consultare i clienti uno alla volta non è per questo autorizzato a scaricare l'intero archivio in un pomeriggio. Il modulo colma questa lacuna, in una scheda dedicata.</p>
+<ul>
+  <li><strong>Registro delle chiamate</strong> — una riga per chiamata: chi, quale strumento, con quali parametri, durata ed esito. Le <em>risposte</em> non vengono mai memorizzate; i parametri sì, perché sono ciò che rende una chiamata verificabile, e possono essere disattivati se la vostra politica lo richiede.</li>
+  <li><strong>Quota per utente</strong> — un tetto alle chiamate degli strumenti su una finestra mobile. Un rifiuto risponde all'assistente con numeri utilizzabili invece che con un errore opaco. Contano solo le chiamate agli strumenti: connettersi ed elencare gli strumenti non consuma nulla.</li>
+  <li><strong>Avviso via e-mail</strong> — segnala a un amministratore quando il volume di un utente si distingue, con un intervallo di attesa perché una sessione intensa invii un messaggio e non cinquanta.</li>
+  <li><strong>Pulizia automatica</strong> — conservazione configurabile, 90 giorni per impostazione predefinita.</li>
+</ul>
+
 <h3>🛠️ Niente da ospitare, niente da sorvegliare</h3>
 <p>emMCP funziona dentro il vostro Dolibarr esistente, come qualsiasi pagina PHP. Nessun servizio da avviare, nessuna porta da aprire, nessun container da mantenere. Se il vostro Dolibarr risponde, risponde anche il vostro server MCP.</p>
 
