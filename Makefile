@@ -377,11 +377,11 @@ publish: ## Publish latest release to EMGateway
 # re-submits every field it found, changing only the version and the zip. Run
 # the dry target first when anything about the listing has changed.
 .PHONY: dolistore-publish dolistore-publish-dry publish-all release-and-publish-all
-dolistore-publish: ## Update the DoliStore listing (version + zip)
-	@DOLISTORE_MODULE_DIR=$(CURDIR) node /home/morgan/project/dolibarr/scripts/dolistore-publish/publish-to-dolistore.js $(RELEASE_DIR)/$(RELEASE_FILENAME)
+dolistore-publish: ## Update the DoliStore listing (version + zip + the five descriptions)
+	@DOLISTORE_MODULE_DIR=$(CURDIR) node /home/morgan/project/dolibarr/scripts/dolistore-publish/publish-to-dolistore.js $(RELEASE_DIR)/$(RELEASE_FILENAME) --descriptions $(CURDIR)/marketing/dolistore
 
 dolistore-publish-dry: ## DoliStore: login + read current->new version, submit nothing
-	@DOLISTORE_MODULE_DIR=$(CURDIR) node /home/morgan/project/dolibarr/scripts/dolistore-publish/publish-to-dolistore.js $(RELEASE_DIR)/$(RELEASE_FILENAME) --dry-run
+	@DOLISTORE_MODULE_DIR=$(CURDIR) node /home/morgan/project/dolibarr/scripts/dolistore-publish/publish-to-dolistore.js $(RELEASE_DIR)/$(RELEASE_FILENAME) --descriptions $(CURDIR)/marketing/dolistore --dry-run
 
 publish-all: publish dolistore-publish ## Publish to EMGateway then update DoliStore
 
