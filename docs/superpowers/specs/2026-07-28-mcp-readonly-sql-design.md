@@ -1,5 +1,14 @@
 # Requêtes SQL en lecture seule via le MCP Dolibarr — conception
 
+> **Périmé sur un point (28/09/2026).** Le compte MySQL dédié en lecture seule
+> décrit plus bas (`EMMCP_SQL_DB_USER` / `EMMCP_SQL_DB_PASSWORD`) a été
+> abandonné : il ne se configurait jamais en pratique. L'accès SQL utilise
+> désormais les identifiants Dolibarr habituels, sur une connexion séparée, et
+> la lecture seule est garantie par l'analyse de la requête
+> (refus `SQL_NOT_READ_ONLY`) plutôt que par les privilèges du compte.
+> Le reste du document tient toujours.
+
+
 Date : 2026-07-28
 Statut : validé (arbitrages tranchés par Morgan le 2026-07-28)
 Modules concernés : `dolibarr-mcp-server` (runtime partagé, MIT), `emmcp` (livrable prioritaire, GPL-3.0+), `dalfred` (réutilisation)

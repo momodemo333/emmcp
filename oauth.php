@@ -234,17 +234,43 @@ switch ($emmcp_route) {
 
 		$clientLabel = !empty($client->client_name) ? $client->client_name : $client->client_id;
 
-		print '<div class="center" style="max-width:600px;margin:40px auto;">';
-		print load_fiche_titre($langs->trans('EmmcpOAuthConsentTitle'), '', 'lock');
-		print '<div class="info" style="text-align:left;">';
+		// This page runs with NOREQUIREMENU, and without a menu Dolibarr still
+		// lays the content out in a table: #id-right stays a table-cell that
+		// shrinks to its content, so the usual "margin: auto" has no width to
+		// share and the card sticks to the left. Give the two wrappers a real
+		// width for this page only, then centre the card inside them.
+		print '<style>
+#id-right { display: block !important; width: 100% !important; }
+#id-right > .fiche { width: auto !important; }
+.emmcp-consent { max-width: 540px; margin: 60px auto; padding: 32px 36px 28px; background: #fff;
+	border: 1px solid #e3e3e3; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.07); }
+.emmcp-consent h1 { margin: 0 0 22px; font-size: 1.35em; font-weight: 600; text-align: center; line-height: 1.3;
+	border: 0; background: none; padding: 0; color: #1a1a1a; }
+/* Dolibarr puts tabindex="-1" on the heading and focuses it on load, which
+   draws a focus ring around the title. The heading is not interactive, so
+   the ring carries no information here. */
+.emmcp-consent h1:focus { outline: none; }
+.emmcp-consent h1 .fa-lock { color: #2b7ab5 !important; margin-right: 9px; }
+.emmcp-consent .emmcp-intro { margin: 0 0 6px; line-height: 1.55; }
+.emmcp-consent ul { margin: 18px 0 26px; padding-left: 22px; line-height: 1.6; }
+.emmcp-consent .emmcp-actions { text-align: center; margin-top: 4px; }
+.emmcp-consent .emmcp-actions button { margin: 0 6px; padding: 10px 26px; font-size: 1em; font-weight: 600;
+	border-radius: 5px; cursor: pointer; background-image: none; text-shadow: none; }
+.emmcp-consent .emmcp-actions .emmcp-accept { background: #2b7ab5; border: 1px solid #24689b; color: #fff; }
+.emmcp-consent .emmcp-actions .emmcp-accept:hover { background: #24689b; }
+.emmcp-consent .emmcp-actions .emmcp-deny { background: #f2f2f2; border: 1px solid #ccc; color: #444; }
+.emmcp-consent .emmcp-actions .emmcp-deny:hover { background: #e6e6e6; }
+</style>';
+
+		print '<div class="emmcp-consent">';
+		print '<h1>'.img_picto('', 'lock', 'class="pictofixedwidth"').dol_escape_htmltag($langs->trans('EmmcpOAuthConsentTitle')).'</h1>';
+		print '<div class="info emmcp-intro">';
 		print $langs->trans('EmmcpOAuthConsentIntro', '<strong>'.dol_escape_htmltag($clientLabel).'</strong>', '<strong>'.dol_escape_htmltag($user->login).'</strong>');
 		print '</div>';
-		print '<div style="text-align:left;margin:16px 0;">';
 		print '<ul>';
 		print '<li>'.$langs->trans('EmmcpOAuthConsentScope1').'</li>';
 		print '<li>'.$langs->trans('EmmcpOAuthConsentScope2').'</li>';
 		print '</ul>';
-		print '</div>';
 
 		print '<form method="POST" action="'.dol_escape_htmltag($issuer.'/authorize').'">';
 		print '<input type="hidden" name="token" value="'.newToken().'">';
@@ -252,8 +278,10 @@ switch ($emmcp_route) {
 		foreach ($params as $k => $v) {
 			print '<input type="hidden" name="'.$k.'" value="'.dol_escape_htmltag($v).'">';
 		}
-		print '<button type="submit" name="decision" value="accept" class="button buttongen marginrightonly">'.$langs->trans('EmmcpOAuthAccept').'</button>';
-		print '<button type="submit" name="decision" value="deny" class="button buttongen button-cancel">'.$langs->trans('EmmcpOAuthDeny').'</button>';
+		print '<div class="emmcp-actions">';
+		print '<button type="submit" name="decision" value="accept" class="button emmcp-accept">'.$langs->trans('EmmcpOAuthAccept').'</button>';
+		print '<button type="submit" name="decision" value="deny" class="button emmcp-deny">'.$langs->trans('EmmcpOAuthDeny').'</button>';
+		print '</div>';
 		print '</form>';
 		print '</div>';
 

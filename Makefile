@@ -79,7 +79,11 @@ help:
 	@echo "  make tag                 - Create and push git tag v$(VERSION)"
 	@echo "  make release             - tag + build-release"
 	@echo "  make publish             - Upload the ZIP to EMGateway (product from .emgateway.conf)"
-	@echo "  make release-and-publish - release + publish"
+	@echo "  make dolistore-publish   - Update the DoliStore listing (product from .dolistore.conf)"
+	@echo "  make dolistore-publish-dry - DoliStore: show current -> new version, submit nothing"
+	@echo "  make publish-all         - publish + dolistore-publish"
+	@echo "  make release-and-publish - release + publish (EMGateway only)"
+	@echo "  make release-and-publish-all - release + both destinations"
 	@echo "  make clean               - Remove build artifacts"
 	@echo ""
 
@@ -107,6 +111,14 @@ EXPECTED_RUNTIME_VERSION ?= 2.5.1
 # commit instead — explicitly, never by default.
 EXPECTED_OAUTH_VERSION ?= 1.0.1
 EXPECTED_OAUTH_COMMIT ?=
+
+# The SQL and audit libraries are two more separate repositories bundled into
+# the ZIP, and they were not checked at all until 1.5.1. That gap shipped: the
+# 1.5.0 package carried a failureReason() that existed only in an uncommitted
+# working tree, so the released code was in no commit and a build from clean
+# checkouts would have fatal'd on a missing method. Same rule as oauth now.
+EXPECTED_SQL_VERSION ?= 1.1.1
+EXPECTED_AUDIT_VERSION ?= 1.1.0
 
 # Fixed timestamp for every entry in the ZIP. Any constant works; what matters
 # is that it does not change between builds of the same sources.
@@ -176,7 +188,34 @@ check-oauth:
 	fi
 .PHONY: check-oauth
 
-build-release: check-runtime check-oauth
+# Same contract as check-oauth, for the two libraries that had none.
+# $(1) = directory, $(2) = human name, $(3) = expected version
+define check_tagged_lib
+	@test -d "$(1)/src" || (echo "$(RED)$(2) source not found: $(1)$(NC)" && exit 1)
+	@cd $(1) && \
+	if [ -n "`git status --porcelain`" ]; then \
+		echo "$(RED)$(2) checkout is dirty; commit or stash before building.$(NC)"; \
+		git status --short; \
+		exit 1; \
+	fi
+	@cd $(1) && \
+	if ! git describe --exact-match --tags HEAD 2>/dev/null | grep -qx "v$(3)"; then \
+		echo "$(RED)$(2) HEAD is not at tag v$(3).$(NC)"; \
+		echo "$(YELLOW)Check out that tag, or raise EXPECTED_$(shell echo $(2) | tr 'a-z-' 'A-Z_' | sed 's/DOLIBARR_MCP_//')_VERSION.$(NC)"; \
+		exit 1; \
+	fi; \
+	echo "  $(2) v$(3) verified at its tag ($(1))"
+endef
+
+check-sql:
+	$(call check_tagged_lib,$(LIB_SQL_SRC),dolibarr-mcp-sql,$(EXPECTED_SQL_VERSION))
+.PHONY: check-sql
+
+check-audit:
+	$(call check_tagged_lib,$(LIB_AUDIT_SRC),dolibarr-mcp-audit,$(EXPECTED_AUDIT_VERSION))
+.PHONY: check-audit
+
+build-release: check-runtime check-oauth check-sql check-audit
 	@echo "$(GREEN)Building emMCP v$(VERSION)...$(NC)"
 	@test -d "$(MCP_PACKAGE_SRC)" || (echo "$(RED)MCP package source not found: $(MCP_PACKAGE_SRC)$(NC)" && exit 1)
 	@rm -rf $(BUILD_DIR)
@@ -305,6 +344,8 @@ release: check-git-clean
 	@echo "$(GREEN)[1/4] Verifying pinned dependencies...$(NC)"
 	@$(MAKE) REQUIRED_RUNTIME_TAG=v$(EXPECTED_RUNTIME_VERSION) check-runtime
 	@$(MAKE) check-oauth
+	@$(MAKE) check-sql
+	@$(MAKE) check-audit
 
 	@echo "$(GREEN)[2/4] Building and proving reproducibility...$(NC)"
 	@$(MAKE) REQUIRED_RUNTIME_TAG=v$(EXPECTED_RUNTIME_VERSION) verify-reproducible
@@ -328,7 +369,25 @@ release: check-git-clean
 publish: ## Publish latest release to EMGateway
 	@EMGATEWAY_MODULE_DIR=$(CURDIR) /home/morgan/project/dolibarr/scripts/publish-to-gateway.sh $(RELEASE_DIR)/$(RELEASE_FILENAME)
 
+# DoliStore listing. Needs .dolistore.conf here (DOLISTORE_PRODUCT_ID) and a
+# .dolistore-credentials file found walking up from this directory. See
+# scripts/dolistore-publish/README.md.
+#
+# The vendor form is a "replace everything" POST: the script reads the page and
+# re-submits every field it found, changing only the version and the zip. Run
+# the dry target first when anything about the listing has changed.
+.PHONY: dolistore-publish dolistore-publish-dry publish-all release-and-publish-all
+dolistore-publish: ## Update the DoliStore listing (version + zip)
+	@DOLISTORE_MODULE_DIR=$(CURDIR) node /home/morgan/project/dolibarr/scripts/dolistore-publish/publish-to-dolistore.js $(RELEASE_DIR)/$(RELEASE_FILENAME)
+
+dolistore-publish-dry: ## DoliStore: login + read current->new version, submit nothing
+	@DOLISTORE_MODULE_DIR=$(CURDIR) node /home/morgan/project/dolibarr/scripts/dolistore-publish/publish-to-dolistore.js $(RELEASE_DIR)/$(RELEASE_FILENAME) --dry-run
+
+publish-all: publish dolistore-publish ## Publish to EMGateway then update DoliStore
+
 release-and-publish: release publish
+
+release-and-publish-all: release publish-all ## Release, then both destinations
 
 clean:
 	@rm -rf $(BUILD_DIR)

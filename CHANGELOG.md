@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.5.1] - 2026-09-28
+
+### Fixed
+- **OAuth consent screen: presentation.** The page a user lands on when
+  claude.ai asks for access was laid out badly. It runs with `NOREQUIREMENU`,
+  and without a menu Dolibarr still builds its table layout: `#id-right`
+  stayed a table cell that shrinks to its content, so `margin: auto` had no
+  width to share and the card sat against the left edge. The two wrappers are
+  now given a real width for this page only, and the consent card is a proper
+  centred panel.
+
+  Along with it: the title no longer carries the focus ring Dolibarr draws
+  after focusing its `tabindex="-1"` heading — the heading is not interactive,
+  so the ring said nothing — the padlock is legible instead of near-white, and
+  the two buttons are explicit rather than inheriting a theme style that
+  rendered the accept button as white text on a pale background.
+
+  Nothing changed in the flow itself: the form, its CSRF token, the parameters
+  it carries and the codes it issues are untouched.
+
 ## [1.5.0] - 2026-09-04
 
 ### Added
