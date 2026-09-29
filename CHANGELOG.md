@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.6.0] - 2026-09-29
+
+### Fixed
+- **Searches by field value were answered with the wrong record** (embedded MCP
+  runtime 2.5.1 → 2.6.0). The `filters` argument of `dolibarr_list` was
+  documented to the model as "filter by field values", but its keys were merged
+  straight into the HTTP query string — and Dolibarr's REST router binds only
+  the parameters an endpoint declares, discarding the rest in silence. Looking
+  up a third party by e-mail returned a different company, and the tool
+  reported success. Filters that an endpoint cannot bind are now translated to
+  `sqlfilters`, and one it cannot express at all is refused rather than
+  quietly ignored. Full details in the runtime's own changelog.
+
+### Changed
+- Pinned dependency versions: MCP runtime 2.6.0, audit library 1.1.0,
+  SQL library 1.1.1.
+
 ## [1.5.1] - 2026-09-28
 
 ### Fixed
