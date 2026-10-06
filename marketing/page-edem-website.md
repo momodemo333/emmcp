@@ -225,3 +225,32 @@ réellement posées :
 Prévoir les renvois croisés avec la documentation de Dalfred : les deux modules
 partagent le même serveur MCP embarqué, et un client qui hésite entre les deux
 cherche souvent la différence dans la documentation.
+
+---
+
+## À créer sur le site : le point d'annonce de version d'emMCP
+
+**Bloquant pour les mises à jour clients.** Le module interroge
+`https://www.e-dem.com/dolibarr/emmcp/last_version.php` pour afficher « mise à
+jour disponible » dans Dolibarr. Ce point répond **1.2.0** depuis juillet : les
+clients d'emMCP n'ont vu aucune version depuis (1.3.3 → 1.7.0 publiées depuis).
+
+À reproduire sur le modèle de Dalfred, qui fonctionne :
+
+- `https://www.e-dem.com/dolibarr/dalfred/last_version.php` — renvoie la version
+  en texte brut (aujourd'hui `2.33.0`) ;
+- `https://www.e-dem.com/dolibarr/dalfred/webhook_update_version.php` — reçoit
+  la nouvelle version à chaque release, protégé par un jeton.
+
+Pour emMCP : créer les deux mêmes points sous `/dolibarr/emmcp/`, puis donner à
+Morgan l'URL du webhook et son jeton. Il les ajoutera à
+`/home/morgan/project/dolibarr/.version-webhook-credentials`
+(`EMMCP_WEBHOOK_URL=`, `EMMCP_WEBHOOK_TOKEN=`), et la release annoncera alors
+la version automatiquement. Valeur à publier dès la création : **1.7.0**.
+
+## Documentation : nouvel onglet depuis 1.7.0
+
+L'onglet **« Accès accordés »** liste les clients IA connectés par OAuth, avec
+un bouton **Révoquer**, et contient la vérification de l'en-tête
+`Authorization` (point 4 du plan de documentation ci-dessus : c'est désormais
+là qu'on la lance).
