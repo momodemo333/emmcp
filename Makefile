@@ -42,7 +42,7 @@ CRITICAL_FILES := mcp.php oauth.php .htaccess \
 	vendor/dolibarr-mcp-sql/src/SqlCapability.php \
 	vendor/dolibarr-mcp-audit/src/McpAudit.php \
 	vendor/dolibarr-mcp-audit/src/CallLog.php \
-	admin/mcp_activity.php \
+	admin/mcp_activity.php admin/mcp_access.php \
 	sql/llx_emmcp_mcp_log.sql \
 	vendor/dolibarr-mcp-sql/src/SqlGateway.php \
 	vendor/dolibarr-mcp-sql/src/SqlPermissions.php \
