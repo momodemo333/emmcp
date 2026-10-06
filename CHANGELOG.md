@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.7.0] - 2026-10-06
+
+### Security
+- **Removing a user's REST API key did not end their OAuth access.** The key
+  the tools act through was regenerated on every MCP call when missing, so the
+  natural way for an administrator to cut someone's access was silently undone
+  by the next request. The key is now created only when the user consents;
+  removing it, or disabling the user, ends every OAuth access they gave, and
+  the client is answered 401 so it goes back through sign-in.
+- **An authorization code or refresh token could be used several times at
+  once.** Twelve parallel exchanges of one code could each get tokens; now
+  exactly one does. A code or refresh token presented a second time revokes
+  everything issued under that grant.
+- The consent form always requires its CSRF token, whatever the global setting.
+- Client registration is capped at 50 per hour, and clients that never
+  obtained a token are purged after a day.
+
+### Added
+- **"Granted accesses" tab**: every AI client a user connected through OAuth,
+  when it was granted and last renewed, and a Revoke button that ends it at
+  once. The listing now really lets an access be revoked at any time.
+- **Authorization header check** on the same tab: the server calls its own
+  endpoint and says whether the header reaches PHP; if not, it shows the line
+  to add for Apache or nginx. Many hosts ignore the module's .htaccess, and the
+  only symptom otherwise is a 401 right after a successful sign-in.
+- Authorization responses carry `iss` (RFC 9207).
+
+### Fixed
+- **Claude Desktop (mcp-remote) could not connect**: it rejected the OpenID
+  discovery document, which lacked `jwks_uri` (ZodError). That route now has
+  its own document; claude.ai, ChatGPT and Claude Code are unaffected.
+- `client_secret_basic` works under PHP-FPM.
+- Creating a supplier or customer without a code now lets Dolibarr number it,
+  instead of leaving it without a code or failing with a 500 (issue #2).
+
+### Changed
+- Embedded MCP runtime 2.6.1, OAuth library 1.1.0.
+
 ## [1.6.0] - 2026-09-29
 
 ### Fixed

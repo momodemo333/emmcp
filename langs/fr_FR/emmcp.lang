@@ -170,3 +170,25 @@ EmmcpMcpPurged=%s ligne(s) supprimée(s) du journal.
 EmmcpMcpPurgeFailed=La purge du journal a échoué.
 EmmcpMcpAuditMissing=La bibliothèque dolibarr-mcp-audit est introuvable. Les appels ne sont ni journalisés ni limités. Réinstallez le module.
 EmmcpMcpSchemaOutOfDate=Le schéma de base de données n'est pas à jour : le journal peut être incomplet.
+
+# Accès accordés (OAuth) et vérification de l'en-tête Authorization
+EmmcpAccessTab=Accès accordés
+EmmcpAccessIntro=Chaque ligne est un client IA qu'un utilisateur a connecté par OAuth (claude.ai, ChatGPT, Claude Desktop…). L'accès se renouvelle tant que le client l'utilise, et expire après 30 jours sans utilisation.
+EmmcpAccessGranted=Accès actifs
+EmmcpAccessClient=Client
+EmmcpAccessSince=Accordé le
+EmmcpAccessLastRenewal=Dernier renouvellement
+EmmcpAccessExpires=Expire le
+EmmcpAccessNone=Aucun accès actif.
+EmmcpAccessRevoke=Révoquer
+EmmcpAccessRevoked=Accès révoqué. Le client devra demander à l'utilisateur de se reconnecter et de consentir à nouveau.
+EmmcpAccessRevokeHelp=Révoquer met fin à l'accès immédiatement. Pour empêcher un utilisateur de se reconnecter, retirez-lui la permission ou désactivez son compte ; supprimer sa clé API REST met aussi fin à tous les accès OAuth qu'il a donnés.
+EmmcpProbeAuth=En-tête Authorization
+EmmcpProbeAuthHelp=Les clients MCP s'authentifient avec un en-tête « Authorization: Bearer ». Apache exécutant PHP en CGI/FastCGI le supprime sauf configuration contraire, et beaucoup d'hébergeurs ignorent le .htaccess fourni avec le module : le seul symptôme est une erreur 401 juste après une connexion réussie. Cette vérification demande au point d'accès lui-même si l'en-tête lui parvient.
+EmmcpProbeAuthRun=Vérifier maintenant
+EmmcpProbeAuthOk=L'en-tête Authorization parvient bien à Dolibarr
+EmmcpProbeAuthLost=L'en-tête Authorization ne parvient PAS à Dolibarr : les clients OAuth et Bearer recevront une erreur 401. Ajoutez l'une de ces lignes à la configuration du serveur web de ce site :
+EmmcpProbeAuthApache=Apache 2.4.13 ou supérieur, dans le Directory ou le VirtualHost de Dolibarr
+EmmcpProbeAuthApacheAlt=Apache plus ancien, nécessite mod_setenvif
+EmmcpProbeAuthNginx=nginx avec PHP-FPM, dans la location qui transmet le .php à FastCGI
+EmmcpProbeAuthUnreachable=Le serveur n'a pas pu appeler son propre point d'accès (%s) : vérification non concluante, testez depuis un client.

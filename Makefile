@@ -99,7 +99,7 @@ lint:
 # bundle. The build refuses to package anything else: the package is a separate
 # repository, so without this the ZIP silently carries whatever happens to be
 # checked out — a work-in-progress branch, or a stale tree.
-EXPECTED_RUNTIME_VERSION ?= 2.6.0
+EXPECTED_RUNTIME_VERSION ?= 2.6.1
 
 # Same for the shared OAuth library: it is a third separate repository, and the
 # build would otherwise bundle whatever is checked out beside it.
@@ -109,7 +109,7 @@ EXPECTED_RUNTIME_VERSION ?= 2.6.0
 # still accept an arbitrary commit that merely happens to be clean. HEAD must
 # be the tag itself. Set EXPECTED_OAUTH_COMMIT to accept a specific untagged
 # commit instead — explicitly, never by default.
-EXPECTED_OAUTH_VERSION ?= 1.0.1
+EXPECTED_OAUTH_VERSION ?= 1.1.0
 EXPECTED_OAUTH_COMMIT ?=
 
 # The SQL and audit libraries are two more separate repositories bundled into

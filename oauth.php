@@ -45,6 +45,13 @@ if (!empty($_SERVER['PATH_INFO'])) {
 }
 $emmcp_route = rtrim($emmcp_route, '/');
 
+if ($emmcp_route === '/authorize') {
+	// The consent form grants access to the whole account: its token check
+	// must not depend on a global setting an administrator can turn off.
+	if (!defined('CSRFCHECK_WITH_TOKEN')) {
+		define('CSRFCHECK_WITH_TOKEN', '1');
+	}
+}
 if ($emmcp_route !== '/authorize') {
 	if (!defined('NOLOGIN')) {
 		define('NOLOGIN', '1');
@@ -131,9 +138,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 switch ($emmcp_route) {
 	// --- Discovery ---------------------------------------------------------
 
-	case '/.well-known/openid-configuration':
 	case '/.well-known/oauth-authorization-server':
 		emmcp_oauth_json($oauthRouter->metadataAuthorizationServer());
+		// no break (emmcp_oauth_json exits)
+
+	// A client that asks for the OpenID route validates the answer as OpenID
+	// Connect discovery: it gets its own document, carrying the three fields
+	// that requires. The RFC 8414 document above must stay free of them.
+	case '/.well-known/openid-configuration':
+		emmcp_oauth_json($oauthRouter->metadataOpenIdConfiguration());
+		// no break
+
+	case '/jwks':
+		emmcp_oauth_json($oauthRouter->jwks());
 		// no break (emmcp_oauth_json exits)
 
 	case '/.well-known/oauth-protected-resource':
@@ -198,7 +215,7 @@ switch ($emmcp_route) {
 				$redirectParams['error_description'] = $decision->errorDescription;
 			}
 			$redirectParams['state'] = $decision->state;
-			header('Location: '.\DolibarrMcpOAuth\Support\UrlHelper::buildRedirect($decision->redirectUri, $redirectParams), true, 302);
+			header('Location: '.\DolibarrMcpOAuth\Support\UrlHelper::buildRedirect($decision->redirectUri, $redirectParams + array('iss' => $oauthRouter->issuer())), true, 302);
 			exit;
 		}
 
@@ -214,17 +231,22 @@ switch ($emmcp_route) {
 		if ($action === 'consent' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 			// CSRF is enforced by main.inc.php (token checked on POST)
 			if (GETPOST('decision', 'aZ09') === 'accept') {
-				$code = $oauthServer->createAuthorizationCode($client, (int) $user->id, $redirectUri, $codeChallenge, $scope, $resource);
+				// The REST API key the MCP tools act through is created here,
+				// at the moment the user grants access, and never again on the
+				// request path: removing it is how an administrator ends the
+				// access.
+				$code = ($oauthServer->ensureUserApiKey((int) $user->id) === null) ? null
+					: $oauthServer->createAuthorizationCode($client, (int) $user->id, $redirectUri, $codeChallenge, $scope, $resource);
 				if ($code === null) {
-					header('Location: '.\DolibarrMcpOAuth\Support\UrlHelper::buildRedirect($redirectUri, array('error' => 'server_error', 'state' => $state)), true, 302);
+					header('Location: '.\DolibarrMcpOAuth\Support\UrlHelper::buildRedirect($redirectUri, array('error' => 'server_error', 'state' => $state, 'iss' => $oauthRouter->issuer())), true, 302);
 					exit;
 				}
 				dol_syslog('[EMMCP] OAuth consent granted by user '.$user->login.' to client '.$client->client_id, LOG_INFO);
-				header('Location: '.\DolibarrMcpOAuth\Support\UrlHelper::buildRedirect($redirectUri, array('code' => $code, 'state' => $state)), true, 302);
+				header('Location: '.\DolibarrMcpOAuth\Support\UrlHelper::buildRedirect($redirectUri, array('code' => $code, 'state' => $state, 'iss' => $oauthRouter->issuer())), true, 302);
 				exit;
 			}
 			dol_syslog('[EMMCP] OAuth consent denied by user '.$user->login.' to client '.$client->client_id, LOG_INFO);
-			header('Location: '.\DolibarrMcpOAuth\Support\UrlHelper::buildRedirect($redirectUri, array('error' => 'access_denied', 'state' => $state)), true, 302);
+			header('Location: '.\DolibarrMcpOAuth\Support\UrlHelper::buildRedirect($redirectUri, array('error' => 'access_denied', 'state' => $state, 'iss' => $oauthRouter->issuer())), true, 302);
 			exit;
 		}
 

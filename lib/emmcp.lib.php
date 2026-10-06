@@ -53,6 +53,12 @@ function emmcpAdminPrepareHead()
 	$head[$h][2] = 'mcpactivity';
 	$h++;
 
+	// Accesses granted through OAuth, and the button that ends one.
+	$head[$h][0] = dol_buildpath('/emmcp/admin/mcp_access.php', 1);
+	$head[$h][1] = $langs->trans('EmmcpAccessTab');
+	$head[$h][2] = 'mcpaccess';
+	$h++;
+
 	$head[$h][0] = dol_buildpath('/emmcp/admin/about.php', 1);
 	$head[$h][1] = $langs->trans('About');
 	$head[$h][2] = 'about';

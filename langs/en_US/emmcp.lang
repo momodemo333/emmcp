@@ -170,3 +170,25 @@ EmmcpMcpPurged=%s row(s) removed from the log.
 EmmcpMcpPurgeFailed=The log purge failed.
 EmmcpMcpAuditMissing=The dolibarr-mcp-audit library is missing. Calls are neither logged nor limited. Reinstall the module.
 EmmcpMcpSchemaOutOfDate=The database schema is out of date: the log may be incomplete.
+
+# Granted accesses (OAuth) and Authorization header self-test
+EmmcpAccessTab=Granted accesses
+EmmcpAccessIntro=Each line is an AI client a user connected through OAuth (claude.ai, ChatGPT, Claude Desktop...). The access renews itself as long as the client uses it, and lapses after 30 days without use.
+EmmcpAccessGranted=Active accesses
+EmmcpAccessClient=Client
+EmmcpAccessSince=Granted on
+EmmcpAccessLastRenewal=Last renewal
+EmmcpAccessExpires=Lapses on
+EmmcpAccessNone=No active access.
+EmmcpAccessRevoke=Revoke
+EmmcpAccessRevoked=Access revoked. The client will have to ask the user to sign in and consent again.
+EmmcpAccessRevokeHelp=Revoking ends the access at once. To prevent a user from connecting again, remove their permission or disable their account; removing their REST API key also ends every OAuth access they gave.
+EmmcpProbeAuth=Authorization header
+EmmcpProbeAuthHelp=MCP clients authenticate with an "Authorization: Bearer" header. Apache running PHP as CGI/FastCGI drops it unless told otherwise, and many hosts ignore the .htaccess shipped with the module: the only symptom is a 401 right after a successful sign-in. This check asks the endpoint itself whether the header reaches it.
+EmmcpProbeAuthRun=Check now
+EmmcpProbeAuthOk=The Authorization header reaches Dolibarr
+EmmcpProbeAuthLost=The Authorization header does NOT reach Dolibarr: OAuth and Bearer clients will get a 401. Add one of these to the web server configuration of this site:
+EmmcpProbeAuthApache=Apache 2.4.13 or later, in the Directory or VirtualHost of Dolibarr
+EmmcpProbeAuthApacheAlt=older Apache, needs mod_setenvif
+EmmcpProbeAuthNginx=nginx with PHP-FPM, in the location that passes .php to FastCGI
+EmmcpProbeAuthUnreachable=The server could not call its own endpoint (%s): the check is inconclusive, test from a client.

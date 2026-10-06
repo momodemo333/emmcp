@@ -212,6 +212,17 @@ if (emmcp_mcp_oauth_autoload() === null) {
 	emmcp_error(500, -32002, 'dolibarr-mcp-oauth library not found');
 }
 
+// Self-test, before any authentication: the admin page sends a request
+// carrying both "Authorization: Bearer <dummy>" and "X-Dolibarr-Probe: 1",
+// and asks one thing — did the Authorization header reach PHP? It only tells
+// the caller whether their own header survived, nothing else.
+if (!empty($_SERVER['HTTP_X_DOLIBARR_PROBE'])) {
+	header('Content-Type: application/json');
+	header('Cache-Control: no-store');
+	echo json_encode(array('probe' => 'authorization', 'authorization_seen' => \DolibarrMcpOAuth\HttpEndpoint::seesAuthorizationHeader($_SERVER)));
+	exit;
+}
+
 $mcpEndpoint = new \DolibarrMcpOAuth\HttpEndpoint($db, new \DolibarrMcpOAuth\ExposureConfig('emmcp', 'emcp_', 'EMMCP'));
 $getPost = fn(string $name, $default) => GETPOST($name, 'alphanohtml') ?: $default;
 $auth = $mcpEndpoint->resolveApiKey($_SERVER, $getPost);
