@@ -147,7 +147,10 @@ function emmcp_mcp_environment($sqlEnabled = false)
 		emmcp_mcp_enabled_modules($db),
 		isset($conf->entity) ? (int) $conf->entity : null,
 		isModEnabled('multicompany'),
-		array('readonly_sql' => (bool) $sqlEnabled)
+		array('readonly_sql' => (bool) $sqlEnabled),
+		// REST endpoints this module adds to the core API (class/api_emmcp.class.php).
+		// The core time spent endpoints drop the product and always store a start hour.
+		array('timespent' => 'emmcp/timespent')
 	);
 }
 

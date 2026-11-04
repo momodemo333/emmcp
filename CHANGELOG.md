@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.8.0] - unreleased
+
+### Fixed
+- **Time spent lines: date-only lines and products were impossible, and
+  `dolibarr_add_time_spent` claimed success anyway.** The core REST endpoints
+  (Dolibarr 22.0.3) always store a start hour, read the date as GMT — a line
+  meant for 00:00 showed at 01:00 or 02:00 — and drop the product. emMCP now
+  adds its own REST endpoints, `POST emmcp/timespent`, `GET` and
+  `PUT emmcp/timespent/{id}`, which pass the date mode and the product to the
+  core Task class. Nothing in the core is patched.
+  - A date `YYYY-MM-DD` creates a date-only line, stored at 12:00 like the
+    Dolibarr timesheet does; `YYYY-MM-DD HH:MM:SS` is read in the server's local
+    time.
+  - Updating changes only the fields sent; an invoiced line is refused, and its
+    invoice link is carried over explicitly (the core `updateTimeSpent()` would
+    otherwise clear it, because `fetchTimeSpent()` does not load it).
+
+### Added
+- MCP tool `dolibarr_update_time_spent` (runtime 2.7.0): change the date (with
+  or without hour), duration, note, product or user of an existing time spent
+  line.
+
+### Changed
+- Embedded MCP runtime 2.7.0.
+
 ## [1.7.0] - 2026-10-06
 
 ### Security
