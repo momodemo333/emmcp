@@ -21,6 +21,11 @@
 - MCP tool `dolibarr_update_time_spent` (runtime 2.7.0): change the date (with
   or without hour), duration, note, product or user of an existing time spent
   line.
+- **Other modules can add MCP tools.** emMCP asks the Dolibarr hook
+  `emmcpRegisterTools` (context `emmcp`) for `ToolExtension` objects and hands
+  them to the runtime. The hook receives `user` (the session's user, rights
+  loaded) and `collector` (an `ArrayObject` to append to). A module that fails
+  is logged and ignored. First user: the emMCP Extensions module (todos).
 
 ### Changed
 - Embedded MCP runtime 2.7.0.

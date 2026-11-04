@@ -286,12 +286,19 @@ if (emmcp_mcp_audit_autoload() !== null) {
 // not a key, and the limit counts per person.
 $mcpUserId = emmcpResolveUserIdFromApiKey($db, $apiKey);
 $mcpLogin = '';
+$mcpUser = null;
 if ($mcpUserId > 0) {
 	$tmpUser = new User($db);
 	if ($tmpUser->fetch($mcpUserId) > 0) {
 		$mcpLogin = (string) $tmpUser->login;
+		$tmpUser->loadRights();
+		$mcpUser = $tmpUser;
 	}
 }
+
+// Tools other modules add through the "emmcpRegisterTools" hook. They run in
+// this process as the session's user, so they get the user with rights loaded.
+$extensions = emmcp_mcp_extensions($db, $mcpUser);
 
 // Only tool calls are capped. Refusing initialize or tools/list would break the
 // client outright while stopping no data from leaving.
@@ -320,7 +327,7 @@ try {
 	$request = \GuzzleHttp\Psr7\ServerRequest::fromGlobals()
 		->withBody(\GuzzleHttp\Psr7\Utils::streamFor($rawBody));
 
-	$response = DolibarrMcp\Bootstrap::handleHttpRequest($request, $sessionDir, $config, $sqlCapability, $environment);
+	$response = DolibarrMcp\Bootstrap::handleHttpRequest($request, $sessionDir, $config, $sqlCapability, $environment, $extensions);
 
 	if ($audit !== null && $mcpUserId > 0) {
 		// A failed tool answers 200 with the error inside the payload, so the

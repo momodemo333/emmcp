@@ -263,3 +263,56 @@ function emmcp_mcp_audit_config()
 {
 	return new \DolibarrMcpAudit\AuditConfig('emmcp', 'emmcp_', 'EMMCP');
 }
+
+/**
+ * Collect the MCP tool extensions other Dolibarr modules provide.
+ *
+ * Hook contract (context "emmcp", method "emmcpRegisterTools"):
+ *   $parameters['user']      User   the person the MCP session acts as, rights loaded
+ *   $parameters['collector'] ArrayObject  append one or more objects implementing
+ *                            \DolibarrMcp\Extension\ToolExtension
+ * The collector is shared by every hooked module; resArray is not used because
+ * it is merged by key and a second module would overwrite the first.
+ *
+ * A module that throws, or returns something that is not an extension, is
+ * logged and ignored: an extension must never take emMCP down.
+ *
+ * @param  DoliDB    $db      Database handler
+ * @param  User|null $mcpUser User of the MCP session
+ * @return array<int, \DolibarrMcp\Extension\ToolExtension>
+ */
+function emmcp_mcp_extensions($db, $mcpUser)
+{
+	if (!interface_exists('\DolibarrMcp\Extension\ToolExtension')) {
+		// Embedded runtime older than 2.7.0: no extension point to feed.
+		return array();
+	}
+	if (!is_object($mcpUser) || empty($mcpUser->id)) {
+		return array();
+	}
+
+	include_once DOL_DOCUMENT_ROOT.'/core/class/hookmanager.class.php';
+	$hookmanager = new HookManager($db);
+	$hookmanager->initHooks(array('emmcp'));
+
+	$collector = new ArrayObject();
+	$parameters = array('user' => $mcpUser, 'collector' => $collector);
+	$object = null;
+	$action = '';
+	try {
+		$hookmanager->executeHooks('emmcpRegisterTools', $parameters, $object, $action);
+	} catch (\Throwable $e) {
+		dol_syslog('[EMMCP] emmcpRegisterTools hook failed: '.$e->getMessage(), LOG_ERR);
+	}
+
+	$extensions = array();
+	foreach ($collector as $extension) {
+		if ($extension instanceof \DolibarrMcp\Extension\ToolExtension) {
+			$extensions[] = $extension;
+		} else {
+			dol_syslog('[EMMCP] emmcpRegisterTools: ignored '.get_debug_type($extension).', not a ToolExtension', LOG_WARNING);
+		}
+	}
+
+	return $extensions;
+}

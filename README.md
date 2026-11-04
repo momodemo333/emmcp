@@ -141,3 +141,13 @@ Tokens stockés en base sous forme de hash sha256 uniquement
 - Portée OAuth unique (`dolibarr`) : pas encore de granularité par scope.
 - Les requêtes SQL en lecture seule nécessitent MySQL ou MariaDB (PostgreSQL
   n'est pas pris en charge par cette fonctionnalité).
+
+## Extensions
+
+Depuis la 1.8.0, un autre module Dolibarr peut ajouter ses propres outils MCP sans
+modifier emMCP : il déclare le contexte de hook `emmcp` et implémente
+`emmcpRegisterTools($parameters, &$object, &$action, $hookmanager)`. Il y ajoute à
+`$parameters['collector']` (un `ArrayObject`) un objet `\DolibarrMcp\Extension\ToolExtension`.
+`$parameters['user']` est l'utilisateur de la session MCP, droits chargés : les
+outils de l'extension s'exécutent dans Dolibarr en son nom et doivent vérifier ses droits.
+Exemple : le module emMCP Extensions (outils Todo).
