@@ -1,6 +1,54 @@
 # Changelog
 
-## [1.8.0] - unreleased
+## [1.9.0] - 2026-11-12
+
+### Fixed
+- **HTTP 500 on every MCP call when another module, or a library of the
+  Dolibarr core, loads its own copy of psr/log.** Dolibarr runs every module
+  in one PHP process, and PHP cannot hold two classes of the same name: a
+  psr/log 1.x `LoggerInterface` loaded first made our psr/log 3 `NullLogger`
+  a fatal error ("Declaration of Psr\Log\NullLogger::log(...) must be
+  compatible with Psr\Log\LoggerInterface::log(...)"). Seen on a customer
+  install; the same could happen with guzzle, symfony or any PSR interface.
+  The package now prefixes every third-party dependency of the embedded
+  runtime under `EmmcpVendor\` at build time (php-scoper), so nothing another
+  module loads can collide with it; the build proves it by loading a
+  psr/log 1.x interface and a foreign guzzle class first, then serving
+  `initialize` and `tools/list`. Our autoloader is also authoritative now, so
+  it no longer answers for other modules' classes either.
+- **An AI client left idle for about a month could no longer sign in**
+  ("authorization failed" until the connector was deleted and re-created):
+  its OAuth registration was purged along with its expired tokens. Only
+  registrations between one and seven days old that never obtained a token
+  are purged now (dolibarr-mcp-oauth 1.2.0).
+
+### Added
+- **Diagnostic tab**: the checks that can block a connection (REST API
+  module, schema, MCP runtime and dependency isolation, library conflicts,
+  last runtime error, HTTPS URL, OAuth accesses whose user lost their API key,
+  Authorization header), the **connection log** and a plain-text report to
+  send to support, without any secret.
+- **Connection log** (`llx_emmcp_auth_log`, 30 days): every OAuth step
+  (registration, authorization request, consent, token) and every refused MCP
+  request, with the precise reason: code or refresh token unknown, expired or
+  already used, redirect_uri or PKCE mismatch, unknown client_id, revoked
+  access, no credentials reaching PHP... An AI client only shows a generic
+  "authorization failed" and a reference its vendor alone can read; this is
+  the server side of that story.
+- **Runtime guard**: before the MCP runtime is used, its key types are checked
+  to come from its own directory. A foreign copy (possible for the shared
+  `DolibarrMcp\` and `Mcp\` namespaces, or with an unprefixed runtime) is
+  answered with a JSON-RPC error naming the file that defined it, instead of a
+  fatal error. A fatal error that still happens is recorded for the
+  Diagnostic tab and answered in JSON.
+- Token endpoint errors carry an `error_description`.
+
+### Changed
+- Embedded dolibarr-mcp-oauth 1.2.0. Database schema 1.9.0 (new table, created
+  automatically on the first request after the upgrade; no need to disable and
+  re-enable the module).
+
+## [1.8.0] - 2026-11-04
 
 ### Fixed
 - **Time spent lines: date-only lines and products were impossible, and

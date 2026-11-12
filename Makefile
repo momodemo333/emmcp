@@ -56,7 +56,10 @@ CRITICAL_FILES := mcp.php oauth.php .htaccess \
 	lib/emmcp_bootstrap.php \
 	vendor/dolibarr-mcp-oauth/src/OAuthServer.php \
 	vendor/dolibarr-mcp-oauth/src/HttpEndpoint.php \
-	vendor/dolibarr-mcp-oauth/src/OAuthRouter.php
+	vendor/dolibarr-mcp-oauth/src/OAuthRouter.php \
+	vendor/dolibarr-mcp-server/vendor/emmcp-scope-prefix.txt \
+	admin/diagnostic.php class/emmcpauthlog.class.php lib/emmcp_runtime.php \
+	sql/llx_emmcp_auth_log.sql sql/llx_emmcp_auth_log.key.sql
 
 # Colors
 GREEN := \033[0;32m
@@ -109,7 +112,7 @@ EXPECTED_RUNTIME_VERSION ?= 2.7.0
 # still accept an arbitrary commit that merely happens to be clean. HEAD must
 # be the tag itself. Set EXPECTED_OAUTH_COMMIT to accept a specific untagged
 # commit instead — explicitly, never by default.
-EXPECTED_OAUTH_VERSION ?= 1.1.0
+EXPECTED_OAUTH_VERSION ?= 1.2.0
 EXPECTED_OAUTH_COMMIT ?=
 
 # The SQL and audit libraries are two more separate repositories bundled into
@@ -119,6 +122,13 @@ EXPECTED_OAUTH_COMMIT ?=
 # checkouts would have fatal'd on a missing method. Same rule as oauth now.
 EXPECTED_SQL_VERSION ?= 1.1.1
 EXPECTED_AUDIT_VERSION ?= 1.1.0
+
+# php-scoper, which moves every third-party namespace of the embedded runtime
+# under SCOPE_PREFIX\ (see tools/scoper.inc.php for why). Pinned: another
+# version may scope differently, and the ZIP must not change with the machine.
+PHP_SCOPER ?= $(HOME)/.local/share/php-tools/php-scoper.phar
+PHP_SCOPER_VERSION ?= 0.18.17
+SCOPE_PREFIX := EmmcpVendor
 
 # Fixed timestamp for every entry in the ZIP. Any constant works; what matters
 # is that it does not change between builds of the same sources.
@@ -215,7 +225,12 @@ check-audit:
 	$(call check_tagged_lib,$(LIB_AUDIT_SRC),dolibarr-mcp-audit,$(EXPECTED_AUDIT_VERSION))
 .PHONY: check-audit
 
-build-release: check-runtime check-oauth check-sql check-audit
+check-scoper:
+	@test -f "$(PHP_SCOPER)" || (echo "$(RED)php-scoper not found: $(PHP_SCOPER)$(NC)"; echo "$(YELLOW)curl -sSL -o $(PHP_SCOPER) https://github.com/humbug/php-scoper/releases/download/$(PHP_SCOPER_VERSION)/php-scoper.phar$(NC)"; exit 1)
+	@php $(PHP_SCOPER) --version 2>/dev/null | grep -q "$(PHP_SCOPER_VERSION)" || (echo "$(RED)php-scoper must be $(PHP_SCOPER_VERSION)$(NC)"; exit 1)
+.PHONY: check-scoper
+
+build-release: check-runtime check-oauth check-sql check-audit check-scoper
 	@echo "$(GREEN)Building emMCP v$(VERSION)...$(NC)"
 	@test -d "$(MCP_PACKAGE_SRC)" || (echo "$(RED)MCP package source not found: $(MCP_PACKAGE_SRC)$(NC)" && exit 1)
 	@rm -rf $(BUILD_DIR)
@@ -264,6 +279,23 @@ build-release: check-runtime check-oauth check-sql check-audit
 	@php tools/normalize-vendor.php $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server
 	@cd $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server && \
 		composer dump-autoload --no-dev --optimize --no-interaction --quiet
+
+# Dolibarr loads every module into one PHP process: a psr/log, guzzle or
+# symfony class loaded by another module (or by the core, under includes/)
+# takes the place of ours, and a different major version is a fatal error on
+# every MCP call. Prefixing our dependencies makes that collision impossible.
+	@echo "[4b/7] Isolating the runtime's dependencies (prefix $(SCOPE_PREFIX)\\)..."
+	@mv $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server $(BUILD_DIR)/scope-src
+	@cd $(BUILD_DIR)/scope-src && EMMCP_SCOPE_SRC=$(CURDIR)/$(BUILD_DIR)/scope-src \
+		php $(PHP_SCOPER) add-prefix --config $(CURDIR)/tools/scoper.inc.php \
+		--output-dir $(CURDIR)/$(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server --no-interaction --quiet
+	@rm -rf $(BUILD_DIR)/scope-src
+	@rm -f $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server/vendor/scoper-autoload.php
+	@cd $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server && \
+		composer dump-autoload --no-dev --optimize --classmap-authoritative --no-interaction --quiet
+	@php tools/rehash-autoload-files.php $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server $(SCOPE_PREFIX)
+	@printf '%s\n' "$(SCOPE_PREFIX)" > $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server/vendor/emmcp-scope-prefix.txt
+	@php tests/runtime_isolation_test.php $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server
 
 	@echo "[5/7] Pruning dev cruft..."
 	@find $(BUILD_DIR)/$(MODULE_NAME) -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true

@@ -133,6 +133,30 @@ consentement, puis se connecte — sans clé à saisir.
 Tokens stockés en base sous forme de hash sha256 uniquement
 (`llx_emmcp_oauth_token`) ; access token 1 h, refresh token 30 j.
 
+## Diagnostic (connexion qui échoue)
+
+Onglet **Diagnostic** de la configuration du module : vérifications (module
+API REST, schéma, moteur MCP et isolation de ses dépendances, conflits de
+bibliothèques, dernière erreur du moteur, URL HTTPS, accès OAuth sans clé API,
+en-tête Authorization), **journal des connexions** (chaque étape OAuth et
+chaque requête MCP refusée, avec la raison précise, 30 jours :
+`llx_emmcp_auth_log`) et un **rapport à copier pour le support**, sans aucun
+secret.
+
+## Isolation des dépendances
+
+Dolibarr charge tous les modules dans le même processus PHP : une copie de
+psr/log, guzzle ou symfony livrée par un autre module (ou par le cœur, sous
+`includes/`) prendrait la place de la nôtre, et une version majeure différente
+provoque une erreur fatale à chaque appel MCP. Le ZIP publié préfixe donc
+toutes les dépendances tierces du moteur sous `EmmcpVendor\` (php-scoper, voir
+`tools/scoper.inc.php`, étape 4b de `make build-release`, contrôlée par
+`tests/runtime_isolation_test.php`). Restent partagés, volontairement :
+`DolibarrMcp\` et `Mcp\`, que les modules d'extension utilisent. Pour ces deux
+espaces de noms (et pour un moteur non préfixé), `lib/emmcp_runtime.php`
+vérifie avant usage que chaque type clé vient bien du moteur et répond sinon
+par une erreur JSON qui nomme le fichier fautif.
+
 ## Limites connues du POC
 
 - Découverte des tools re-scannée à chaque requête (pas de cache PSR-16).

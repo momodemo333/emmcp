@@ -72,16 +72,9 @@ if ($action == 'revoke' && $oauthServer !== null) {
 $probe = '';
 $probeDetail = '';
 if ($action == 'probe') {
-	$probeUrl = emmcpPublicUrl('/emmcp/mcp.php');
-	// Local addresses are allowed on purpose: the server calls its own URL.
-	$r = getURLContent($probeUrl, 'POST', '{}', 1, array('Content-Type: application/json', 'Authorization: Bearer emmcp-probe', 'X-Dolibarr-Probe: 1'), array('http', 'https'), 2, -1);
-	$json = (empty($r['curl_error_no']) && !empty($r['content'])) ? json_decode($r['content'], true) : null;
-	if (is_array($json) && isset($json['authorization_seen'])) {
-		$probe = $json['authorization_seen'] ? 'seen' : 'lost';
-	} else {
-		$probe = 'unreachable';
-		$probeDetail = !empty($r['curl_error_msg']) ? $r['curl_error_msg'] : 'HTTP '.(isset($r['http_code']) ? $r['http_code'] : '?');
-	}
+	$result = emmcpProbeAuthorizationHeader();
+	$probe = $result['status'];
+	$probeDetail = $result['detail'];
 }
 
 // --- View ---------------------------------------------------------------------

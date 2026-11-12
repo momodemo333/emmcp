@@ -223,10 +223,25 @@ if (!empty($_SERVER['HTTP_X_DOLIBARR_PROBE'])) {
 	exit;
 }
 
+dol_include_once('/emmcp/class/emmcpauthlog.class.php');
+dol_include_once('/emmcp/lib/emmcp_runtime.php');
+
 $mcpEndpoint = new \DolibarrMcpOAuth\HttpEndpoint($db, new \DolibarrMcpOAuth\ExposureConfig('emmcp', 'emcp_', 'EMMCP'));
 $getPost = fn(string $name, $default) => GETPOST($name, 'alphanohtml') ?: $default;
 $auth = $mcpEndpoint->resolveApiKey($_SERVER, $getPost);
 if ($auth->apiKey === null) {
+	// The connection log is what an administrator reads when a client says
+	// "authorization failed". A request without any credential is the normal
+	// first step of every OAuth connection, but right after a token was
+	// issued it means the web server dropped the Authorization header.
+	$presented = \DolibarrMcpOAuth\HttpEndpoint::seesAuthorizationHeader($_SERVER)
+		|| !empty($_SERVER['HTTP_DOLAPIKEY']) || GETPOST('DOLAPIKEY', 'alphanohtml') !== '';
+	EmmcpAuthLog::record(
+		$db,
+		'mcp_auth',
+		false,
+		$presented ? $auth->error : 'No credentials reached PHP (expected on the first request of a connection; right after a token was issued, the web server is stripping the Authorization header)'
+	);
 	emmcp_error($auth->httpCode, -32001, $auth->error);
 }
 $apiKey = $auth->apiKey;
@@ -242,7 +257,25 @@ $autoload = \DolibarrMcpOAuth\Support\PackageLocator::findAutoloader(array(
 if (!$autoload) {
 	emmcp_error(500, -32002, 'Dolibarr MCP server package not found (install the Dalfred module or bundle the package)');
 }
-require_once $autoload;
+
+// Shared-library collisions: refuse with the culprit's name instead of dying
+// on a fatal error. See lib/emmcp_runtime.php.
+$runtimeDir = emmcp_runtime_package_dir($autoload);
+$GLOBALS['emmcp_runtime_user'] = emmcpResolveUserIdFromApiKey($db, $apiKey);
+$conflicts = emmcp_runtime_conflicts($runtimeDir, false);
+emmcp_runtime_arm_fatal_handler();
+if (empty($conflicts)) {
+	require_once $autoload;
+	$conflicts = emmcp_runtime_conflicts($runtimeDir, true);
+}
+if (!empty($conflicts)) {
+	$conflictMessage = emmcp_runtime_conflict_message($conflicts[0]);
+	dol_syslog('[EMMCP] '.$conflictMessage, LOG_ERR);
+	emmcp_runtime_record_error($conflictMessage, $conflicts[0]['file']);
+	EmmcpAuthLog::record($db, 'mcp_runtime', false, $conflictMessage, null, $GLOBALS['emmcp_runtime_user']);
+	emmcp_runtime_disarm();
+	emmcp_error(500, -32002, $conflictMessage);
+}
 
 // --- Handle the MCP request ------------------------------------------------
 
@@ -324,8 +357,12 @@ if ($audit !== null && $mcpUserId > 0 && $call['method'] === 'tools/call') {
 $startedAt = microtime(true);
 
 try {
-	$request = \GuzzleHttp\Psr7\ServerRequest::fromGlobals()
-		->withBody(\GuzzleHttp\Psr7\Utils::streamFor($rawBody));
+	// The runtime's dependencies may be prefixed (released package) or not
+	// (development checkout, Dalfred's copy): name them through the helper.
+	$serverRequestClass = emmcp_runtime_class($runtimeDir, 'GuzzleHttp\Psr7\ServerRequest');
+	$utilsClass = emmcp_runtime_class($runtimeDir, 'GuzzleHttp\Psr7\Utils');
+	$request = $serverRequestClass::fromGlobals()
+		->withBody($utilsClass::streamFor($rawBody));
 
 	$response = DolibarrMcp\Bootstrap::handleHttpRequest($request, $sessionDir, $config, $sqlCapability, $environment, $extensions);
 
@@ -353,8 +390,12 @@ try {
 		);
 	}
 
+	emmcp_runtime_disarm();
 	DolibarrMcp\Bootstrap::emit($response);
 } catch (Throwable $e) {
+	emmcp_runtime_disarm();
+	emmcp_runtime_record_error(get_class($e).': '.$e->getMessage(), $e->getFile(), $e->getLine());
+	EmmcpAuthLog::record($db, 'mcp_runtime', false, get_class($e).': '.$e->getMessage(), null, $mcpUserId > 0 ? $mcpUserId : null);
 	if ($audit !== null && $mcpUserId > 0) {
 		$audit->record(
 			$mcpUserId,

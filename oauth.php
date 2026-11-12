@@ -102,6 +102,13 @@ if (!isModEnabled('emmcp')) {
 	emmcp_oauth_json(array('error' => 'server_error', 'error_description' => 'Module emMCP not enabled'), 503);
 }
 
+dol_include_once('/emmcp/class/emmcpauthlog.class.php');
+
+// The schema must be current before anything is written to the connection
+// log: on a files-only upgrade this may well be the first request served.
+dol_include_once('/emmcp/class/emmcpmigrations.class.php');
+EmmcpMigrations::runIfNeeded($db);
+
 $issuer = emmcpPublicUrl('/emmcp/oauth.php');
 $mcpUrl = emmcpPublicUrl('/emmcp/mcp.php');
 $config = new \DolibarrMcpOAuth\ExposureConfig('emmcp', 'emcp_', 'EMMCP');
@@ -168,6 +175,11 @@ switch ($emmcp_route) {
 			emmcp_oauth_json(array('error' => 'invalid_client_metadata', 'error_description' => 'Invalid JSON body'), 400);
 		}
 		$r = $oauthRouter->handleRegister($body);
+		if ($r['httpCode'] < 300) {
+			EmmcpAuthLog::record($db, 'register', true, 'Client registered: '.($body['client_name'] ?? '?').' -> '.implode(', ', (array) ($body['redirect_uris'] ?? array())), $r['payload']['client_id'] ?? null);
+		} else {
+			EmmcpAuthLog::record($db, 'register', false, ($r['payload']['error'] ?? '').': '.($r['payload']['error_description'] ?? '').' (client '.($body['client_name'] ?? '?').')');
+		}
 		emmcp_oauth_json($r['payload'], $r['httpCode']);
 		// no break
 
@@ -179,6 +191,14 @@ switch ($emmcp_route) {
 		}
 		$getPost = fn(string $name, $default) => GETPOST($name, 'alphanohtml') ?: $default;
 		$r = $oauthRouter->handleToken($getPost, $_SERVER);
+		$tokenClientId = (string) GETPOST('client_id', 'alphanohtml');
+		$grantType = (string) GETPOST('grant_type', 'alphanohtml');
+		if ($r['httpCode'] === 200) {
+			EmmcpAuthLog::record($db, 'token', true, 'Tokens issued (grant '.$grantType.')', $tokenClientId);
+		} else {
+			$failure = method_exists($oauthRouter, 'lastFailure') ? $oauthRouter->lastFailure() : null;
+			EmmcpAuthLog::record($db, 'token', false, 'grant '.$grantType.': '.($failure ?: ($r['payload']['error'] ?? 'error')), $tokenClientId);
+		}
 		emmcp_oauth_json($r['payload'], $r['httpCode']);
 		// no break
 
@@ -203,6 +223,19 @@ switch ($emmcp_route) {
 
 		// Never redirect to an unvalidated URI (open redirect protection)
 		if (!$decision->valid && $decision->redirectUri === null) {
+			// Name which of the two it is: an unknown client_id usually means
+			// the registration the AI client remembers no longer exists here.
+			$knownClient = $params['client_id'] !== '' ? $oauthServer->getClient($params['client_id']) : null;
+			EmmcpAuthLog::record(
+				$db,
+				'authorize',
+				false,
+				$knownClient
+					? 'redirect_uri not registered for this client: '.$params['redirect_uri']
+					: 'unknown client_id: the AI client uses a registration this server no longer has; remove and re-add the connector',
+				$params['client_id'],
+				(int) $user->id
+			);
 			llxHeader('', 'emMCP OAuth');
 			print '<div class="error">Invalid OAuth request: unknown client_id or unregistered redirect_uri.</div>';
 			llxFooter();
@@ -210,6 +243,7 @@ switch ($emmcp_route) {
 		}
 
 		if (!$decision->valid) {
+			EmmcpAuthLog::record($db, 'authorize', false, $decision->error.($decision->errorDescription !== null ? ': '.$decision->errorDescription : ''), $params['client_id'], (int) $user->id);
 			$redirectParams = array('error' => $decision->error);
 			if ($decision->errorDescription !== null) {
 				$redirectParams['error_description'] = $decision->errorDescription;
@@ -238,14 +272,17 @@ switch ($emmcp_route) {
 				$code = ($oauthServer->ensureUserApiKey((int) $user->id) === null) ? null
 					: $oauthServer->createAuthorizationCode($client, (int) $user->id, $redirectUri, $codeChallenge, $scope, $resource);
 				if ($code === null) {
+					EmmcpAuthLog::record($db, 'consent', false, 'server_error: '.($oauthServer->error ?: 'could not create the authorization code'), $client->client_id, (int) $user->id);
 					header('Location: '.\DolibarrMcpOAuth\Support\UrlHelper::buildRedirect($redirectUri, array('error' => 'server_error', 'state' => $state, 'iss' => $oauthRouter->issuer())), true, 302);
 					exit;
 				}
 				dol_syslog('[EMMCP] OAuth consent granted by user '.$user->login.' to client '.$client->client_id, LOG_INFO);
+				EmmcpAuthLog::record($db, 'consent', true, 'Access granted by the user', $client->client_id, (int) $user->id);
 				header('Location: '.\DolibarrMcpOAuth\Support\UrlHelper::buildRedirect($redirectUri, array('code' => $code, 'state' => $state, 'iss' => $oauthRouter->issuer())), true, 302);
 				exit;
 			}
 			dol_syslog('[EMMCP] OAuth consent denied by user '.$user->login.' to client '.$client->client_id, LOG_INFO);
+			EmmcpAuthLog::record($db, 'consent', false, 'access_denied: the user refused', $client->client_id, (int) $user->id);
 			header('Location: '.\DolibarrMcpOAuth\Support\UrlHelper::buildRedirect($redirectUri, array('error' => 'access_denied', 'state' => $state, 'iss' => $oauthRouter->issuer())), true, 302);
 			exit;
 		}

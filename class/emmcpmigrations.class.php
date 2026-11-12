@@ -38,7 +38,7 @@ class EmmcpMigrations
 	 * Must be bumped together with $this->version in the module descriptor.
 	 * Forgetting one of the two silently stops migrations from running.
 	 */
-	const MODULE_VERSION = '1.5.0';
+	const MODULE_VERSION = '1.9.0';
 
 	const VERSION_CONSTANT = 'EMMCP_DB_VERSION';
 
@@ -284,6 +284,25 @@ class EmmcpMigrations
 			// one query that must not degrade as the table grows.
 			"ALTER TABLE ".$p."emmcp_mcp_log ADD INDEX idx_emmcp_mcp_log_user_date (entity, fk_user, date_creation)",
 			"ALTER TABLE ".$p."emmcp_mcp_log ADD INDEX idx_emmcp_mcp_log_date (date_creation)",
+
+			// 1.9.0 — connection log behind the Diagnostic tab: each OAuth
+			// step and each refused MCP request, with the reason. Without it
+			// a failed sign-in left nothing but the AI client's own opaque
+			// reference to go on.
+			"CREATE TABLE IF NOT EXISTS ".$p."emmcp_auth_log(
+				rowid integer AUTO_INCREMENT PRIMARY KEY,
+				entity integer DEFAULT 1 NOT NULL,
+				datec datetime NOT NULL,
+				event varchar(32) NOT NULL,
+				success tinyint DEFAULT 0 NOT NULL,
+				reason varchar(255) NULL,
+				client_id varchar(80) NULL,
+				fk_user integer NULL,
+				ip varchar(45) NULL,
+				user_agent varchar(255) NULL
+			) ENGINE=innodb",
+			"ALTER TABLE ".$p."emmcp_auth_log ADD INDEX idx_emmcp_auth_log_date (datec)",
+			"ALTER TABLE ".$p."emmcp_auth_log ADD INDEX idx_emmcp_auth_log_entity_date (entity, datec)",
 		);
 	}
 

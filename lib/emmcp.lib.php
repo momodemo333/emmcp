@@ -59,6 +59,13 @@ function emmcpAdminPrepareHead()
 	$head[$h][2] = 'mcpaccess';
 	$h++;
 
+	// What blocks a connection, in one place: checks, the connection log
+	// with the reason of each failure, and a report to send to support.
+	$head[$h][0] = dol_buildpath('/emmcp/admin/diagnostic.php', 1);
+	$head[$h][1] = $langs->trans('EmmcpDiagTab');
+	$head[$h][2] = 'diagnostic';
+	$h++;
+
 	$head[$h][0] = dol_buildpath('/emmcp/admin/about.php', 1);
 	$head[$h][1] = $langs->trans('About');
 	$head[$h][2] = 'about';
@@ -124,4 +131,29 @@ function emmcpFindMcpAutoloader()
 		dol_buildpath('/emmcp/vendor/dolibarr-mcp-server/vendor/autoload.php', 0),
 		dol_buildpath('/dalfred/dolibarr-mcp-server/vendor/autoload.php', 0),
 	));
+}
+
+/**
+ * Ask the MCP endpoint whether an Authorization header reaches PHP.
+ *
+ * The server calls its own public URL with a dummy Bearer header and the
+ * probe header mcp.php answers to. Local addresses are allowed on purpose.
+ *
+ * @return array{status: string, detail: string} status: seen | lost | unreachable
+ */
+function emmcpProbeAuthorizationHeader()
+{
+	require_once DOL_DOCUMENT_ROOT.'/core/lib/geturl.lib.php';
+
+	$probeUrl = emmcpPublicUrl('/emmcp/mcp.php');
+	$r = getURLContent($probeUrl, 'POST', '{}', 1, array('Content-Type: application/json', 'Authorization: Bearer emmcp-probe', 'X-Dolibarr-Probe: 1'), array('http', 'https'), 2, -1);
+	$json = (empty($r['curl_error_no']) && !empty($r['content'])) ? json_decode($r['content'], true) : null;
+	if (is_array($json) && isset($json['authorization_seen'])) {
+		return array('status' => $json['authorization_seen'] ? 'seen' : 'lost', 'detail' => '');
+	}
+
+	return array(
+		'status' => 'unreachable',
+		'detail' => !empty($r['curl_error_msg']) ? $r['curl_error_msg'] : 'HTTP '.(isset($r['http_code']) ? $r['http_code'] : '?'),
+	);
 }
