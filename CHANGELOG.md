@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.9.1] - 2026-11-13
+
+### Changed
+- **Updates are now announced to every install as soon as they are
+  published.** Dolibarr's module list learns about a new emMCP version from
+  e-dem.com; that version number was until now updated by hand, and could
+  lag behind the release. Publishing a release now updates it automatically,
+  after the package is available for download, and checks it. No change to
+  the module's behaviour or database (schema version 1.9.1, nothing to
+  migrate).
+
 ## [1.9.0] - 2026-11-12
 
 ### Fixed

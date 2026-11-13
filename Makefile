@@ -67,7 +67,7 @@ YELLOW := \033[0;33m
 RED := \033[0;31m
 NC := \033[0m
 
-.PHONY: help version lint build-release check-git-clean tag release publish release-and-publish clean
+.PHONY: help version lint build-release check-git-clean tag release publish update-version-endpoint release-and-publish clean
 
 help:
 	@echo "emMCP Release Management"
@@ -84,8 +84,9 @@ help:
 	@echo "  make publish             - Upload the ZIP to EMGateway (product from .emgateway.conf)"
 	@echo "  make dolistore-publish   - Update the DoliStore listing (product from .dolistore.conf)"
 	@echo "  make dolistore-publish-dry - DoliStore: show current -> new version, submit nothing"
-	@echo "  make publish-all         - publish + dolistore-publish"
-	@echo "  make release-and-publish - release + publish (EMGateway only)"
+	@echo "  make update-version-endpoint - Advertise the tagged version on e-dem.com (webhook)"
+	@echo "  make publish-all         - publish + version endpoint + dolistore-publish"
+	@echo "  make release-and-publish - release + publish + version endpoint (no DoliStore)"
 	@echo "  make release-and-publish-all - release + both destinations"
 	@echo "  make clean               - Remove build artifacts"
 	@echo ""
@@ -415,9 +416,25 @@ dolistore-publish: ## Update the DoliStore listing (version + zip + the five des
 dolistore-publish-dry: ## DoliStore: login + read current->new version, submit nothing
 	@DOLISTORE_MODULE_DIR=$(CURDIR) node /home/morgan/project/dolibarr/scripts/dolistore-publish/publish-to-dolistore.js $(RELEASE_DIR)/$(RELEASE_FILENAME) --descriptions $(CURDIR)/marketing/dolistore --dry-run
 
-publish-all: publish dolistore-publish ## Publish to EMGateway then update DoliStore
+# The version endpoint (url_last_version in the descriptor) is what makes
+# Dolibarr's module list offer the update to every install. Same shared script
+# as the other modules: it posts to public/dolibarr/emmcp/webhook_update_version.php
+# on e-dem.com with the token kept outside any repository
+# (/home/morgan/project/dolibarr/.version-webhook-credentials, EMMCP_WEBHOOK_URL
+# and EMMCP_WEBHOOK_TOKEN), refuses unless v$(VERSION) is pushed and is HEAD,
+# then reads last_version.php back.
+update-version-endpoint: check-git-clean ## Advertise the tagged version on e-dem.com
+	@/home/morgan/project/dolibarr/scripts/update-version-webhook.sh $(MODULE_NAME) $(VERSION)
 
-release-and-publish: release publish
+# Strict order: never advertise a version before EMGateway serves its ZIP.
+publish-all: ## Publish to EMGateway, advertise the version, then update DoliStore
+	@$(MAKE) publish
+	@$(MAKE) update-version-endpoint
+	@$(MAKE) dolistore-publish
+
+release-and-publish: release ## Release, EMGateway, version endpoint
+	@$(MAKE) publish
+	@$(MAKE) update-version-endpoint
 
 release-and-publish-all: release publish-all ## Release, then both destinations
 
