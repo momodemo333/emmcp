@@ -63,8 +63,10 @@ if ($action == 'clearruntime') {
 }
 
 $probe = null;
+$rootProbe = null;
 if ($action == 'probe') {
 	$probe = emmcpProbeAuthorizationHeader();
+	$rootProbe = emmcpProbeRootDiscovery(emmcpPublicUrl('/emmcp/mcp.php'), emmcpPublicUrl('/emmcp/oauth.php'));
 }
 
 /*
@@ -177,6 +179,31 @@ if ($probe !== null) {
 		'value' => $probe['status'] === 'seen' ? $langs->trans('EmmcpProbeAuthOk')
 			: ($probe['status'] === 'lost' ? $langs->trans('EmmcpDiagProbeLost') : $langs->trans('EmmcpProbeAuthUnreachable', $probe['detail'])),
 		'help' => '',
+	);
+}
+
+// Discovery at the root of the domain: clients that build the well-known
+// URLs themselves instead of following the WWW-Authenticate header (ChatGPT,
+// most probably) find nothing there unless the web server rewrites them.
+if ($rootProbe !== null) {
+	$rootOk = $rootProbe['prm']['ok'] && $rootProbe['as']['ok'];
+	$lines = array();
+	foreach ($rootProbe as $p) {
+		$lines[] = ($p['ok'] ? 'OK' : '✗').' '.dol_escape_htmltag($p['url']).($p['detail'] !== '' ? ' <span class="opacitymedium">('.dol_escape_htmltag($p['detail']).')</span>' : '');
+	}
+	$help = '';
+	if (!$rootOk) {
+		$rules = emmcpRootDiscoveryRules($mcpUrl, $issuer);
+		$help = $langs->trans('EmmcpDiagRootDiscoveryHelp')
+			.'<br><br><strong>'.$langs->trans('EmmcpDiagRootDiscoveryApache').'</strong><pre class="small" style="white-space: pre-wrap;">'.dol_escape_htmltag($rules['apache']).'</pre>'
+			.'<strong>'.$langs->trans('EmmcpDiagRootDiscoveryNginx').'</strong><pre class="small" style="white-space: pre-wrap;">'.dol_escape_htmltag($rules['nginx']).'</pre>';
+	}
+	$checks[] = array(
+		'label' => $langs->trans('EmmcpDiagRootDiscovery'),
+		'status' => $rootOk ? 'ok' : 'warning',
+		'value' => ($rootOk ? $langs->trans('EmmcpDiagRootDiscoveryOk') : $langs->trans('EmmcpDiagRootDiscoveryMissing')).'<br>'.implode('<br>', $lines),
+		'help' => $help,
+		'html' => true,
 	);
 }
 

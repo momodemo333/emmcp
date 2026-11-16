@@ -120,6 +120,60 @@ personnalisé », URL `https://<instance>/custom/emmcp/mcp.php`. Claude
 découvre l'OAuth, ouvre la page de connexion Dolibarr et l'écran de
 consentement, puis se connecte — sans clé à saisir.
 
+## ChatGPT (connecteur personnalisé, OAuth)
+
+Dans ChatGPT (mode développeur → créer un connecteur / une app, authentification
+OAuth), l'URL est la même : `https://<instance>/custom/emmcp/mcp.php`.
+
+OpenAI ne documente pas l'ordre exact de sa découverte, mais tout indique
+(journaux publiés par d'autres éditeurs de serveurs MCP, et le message qu'il
+affiche) que ChatGPT ne se contente pas de l'en-tête `WWW-Authenticate` de la
+réponse 401 : il cherche les métadonnées OAuth aux adresses « well-known »
+**de la racine du domaine** (RFC 9728 et RFC 8414, « path insertion »), par exemple
+`https://<instance>/.well-known/oauth-protected-resource/custom/emmcp/mcp.php`.
+Un module Dolibarr ne peut pas répondre à la racine du domaine : sans règle du
+serveur web, ChatGPT affiche « Impossible de détecter les paramètres OAuth ».
+claude.ai et Claude Code n'ont pas besoin de ces règles.
+
+L'onglet **Diagnostic** vérifie ces adresses (bouton « Vérifier l'en-tête
+Authorization et la découverte OAuth ») et, si elles ne répondent pas, affiche
+les règles **déjà adaptées au chemin de l'instance**. Pour une instance à la
+racine du domaine, avec le module dans `custom/` :
+
+Apache — en tête du `.htaccess` du dossier racine du domaine (sous Plesk,
+`httpdocs/.htaccess`) :
+
+```apache
+# emMCP: OAuth discovery at the root of the domain (RFC 9728, RFC 8414)
+<IfModule mod_rewrite.c>
+	RewriteEngine On
+	RewriteRule ^\.well-known/oauth-protected-resource(/custom/emmcp/mcp\.php)?/?$ /custom/emmcp/oauth.php/.well-known/oauth-protected-resource [L]
+	RewriteRule ^\.well-known/(oauth-authorization-server|openid-configuration)(/custom/emmcp/oauth\.php)?/?$ /custom/emmcp/oauth.php/.well-known/$1 [L]
+</IfModule>
+```
+
+nginx seul, ou Plesk sans `.htaccess` (Sites Web & Domaines → Paramètres
+Apache & nginx → Directives nginx supplémentaires) :
+
+```nginx
+# emMCP: OAuth discovery at the root of the domain (RFC 9728, RFC 8414)
+location ~ ^/\.well-known/oauth-protected-resource(/custom/emmcp/mcp\.php)?/?$ {
+	rewrite ^ /custom/emmcp/oauth.php/.well-known/oauth-protected-resource last;
+}
+location ~ ^/\.well-known/(oauth-authorization-server|openid-configuration)(/custom/emmcp/oauth\.php)?/?$ {
+	rewrite ^/\.well-known/([a-z-]+) /custom/emmcp/oauth.php/.well-known/$1 last;
+}
+```
+
+Une seule des deux suffit. Ce sont des réécritures **internes** : pas de
+redirection 301/302, qui ferait changer l'adresse et ne fournirait pas les
+métadonnées de la ressource protégée. Seules ces adresses OAuth sont touchées ;
+la validation Let's Encrypt (`/.well-known/acme-challenge/`) reste servie par
+Plesk. Règles éprouvées sur un Apache 2.4 derrière nginx reproduisant la
+configuration générée par Plesk Obsidian, et avec le client de référence du SDK
+MCP (`@modelcontextprotocol/sdk`) : sans règle et sans l'en-tête, la découverte
+échoue ; avec l'une ou l'autre règle, elle aboutit.
+
 ## Endpoints OAuth (`oauth.php`)
 
 | Route | Rôle |

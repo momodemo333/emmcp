@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.10.0] - 2026-11-16
+
+### Added
+- **ChatGPT: the Diagnostic tab checks OAuth discovery at the root of the
+  domain and hands out the web server rules it needs.** ChatGPT's custom
+  connectors stop at "Unable to detect OAuth settings" on a stock install:
+  everything indicates they look for the OAuth metadata at the root of the
+  domain (`/.well-known/oauth-protected-resource/custom/emmcp/mcp.php`,
+  `/.well-known/oauth-authorization-server/custom/emmcp/oauth.php`, RFC 9728
+  and RFC 8414 path insertion) rather than only following the
+  `WWW-Authenticate` header of the 401, as claude.ai and Claude Code do. A
+  module cannot answer there by itself. The check button of the Diagnostic
+  tab now also queries these two URLs, verifies they name this endpoint and
+  this issuer exactly, and when they do not, prints an Apache (`.htaccess`)
+  rule and an nginx rule (Plesk "Additional nginx directives") already fitted
+  to the instance's path. Both are internal rewrites, no redirection, and
+  leave Let's Encrypt's `/.well-known/acme-challenge/` alone; both were
+  proved on Apache 2.4 behind an nginx reproducing Plesk Obsidian's
+  generated configuration, with the MCP SDK's reference client. The README
+  has a ChatGPT section. Correction: the 1.7.0 entry below said ChatGPT was
+  unaffected by the discovery change; it had never been tested with ChatGPT.
+  No database change (schema version 1.10.0, nothing to migrate).
+
 ## [1.9.1] - 2026-11-13
 
 ### Changed

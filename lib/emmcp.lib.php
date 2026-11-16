@@ -157,3 +157,100 @@ function emmcpProbeAuthorizationHeader()
 		'detail' => !empty($r['curl_error_msg']) ? $r['curl_error_msg'] : 'HTTP '.(isset($r['http_code']) ? $r['http_code'] : '?'),
 	);
 }
+
+/**
+ * Discovery URLs at the root of the domain for the MCP endpoint and its
+ * authorization server: RFC 9728 (protected resource) and RFC 8414
+ * (authorization server) "path insertion".
+ *
+ * A client that follows the WWW-Authenticate header of the 401 (claude.ai,
+ * Claude Code) never needs them. A client that builds the well-known URLs
+ * itself (ChatGPT, most probably) asks for exactly these, and a module can
+ * only answer them through a rewrite rule of the web server.
+ *
+ * @param string $mcpUrl Public URL of mcp.php
+ * @param string $issuer Public URL of oauth.php (the issuer)
+ * @return array{prm: string, as: string}
+ */
+function emmcpRootDiscoveryUrls($mcpUrl, $issuer)
+{
+	$p = parse_url($mcpUrl);
+	$origin = $p['scheme'].'://'.$p['host'].(isset($p['port']) ? ':'.$p['port'] : '');
+
+	return array(
+		'prm' => $origin.'/.well-known/oauth-protected-resource'.(string) parse_url($mcpUrl, PHP_URL_PATH),
+		'as' => $origin.'/.well-known/oauth-authorization-server'.(string) parse_url($issuer, PHP_URL_PATH),
+	);
+}
+
+/**
+ * Web server rules that answer the root discovery URLs from the module,
+ * through an internal rewrite (no redirection, the issuer stays the same).
+ *
+ * The targets are absolute URL paths, so the rules hold wherever Dolibarr
+ * lives on the domain (/custom/, a sub-path, an alternative custom folder).
+ * They only match the OAuth metadata names: /.well-known/acme-challenge/
+ * (Let's Encrypt) and every other well-known URL are left alone.
+ *
+ * @param string $mcpUrl Public URL of mcp.php
+ * @param string $issuer Public URL of oauth.php (the issuer)
+ * @return array{apache: string, nginx: string}
+ */
+function emmcpRootDiscoveryRules($mcpUrl, $issuer)
+{
+	$mcpPath = (string) parse_url($mcpUrl, PHP_URL_PATH);
+	$issuerPath = (string) parse_url($issuer, PHP_URL_PATH);
+	$qMcp = preg_quote($mcpPath, '#');
+	$qIssuer = preg_quote($issuerPath, '#');
+
+	$apache = "# emMCP: OAuth discovery at the root of the domain (RFC 9728, RFC 8414)\n"
+		."<IfModule mod_rewrite.c>\n"
+		."\tRewriteEngine On\n"
+		."\tRewriteRule ^\\.well-known/oauth-protected-resource(".$qMcp.")?/?$ ".$issuerPath."/.well-known/oauth-protected-resource [L]\n"
+		."\tRewriteRule ^\\.well-known/(oauth-authorization-server|openid-configuration)(".$qIssuer.")?/?$ ".$issuerPath."/.well-known/$1 [L]\n"
+		."</IfModule>\n";
+
+	$nginx = "# emMCP: OAuth discovery at the root of the domain (RFC 9728, RFC 8414)\n"
+		."location ~ ^/\\.well-known/oauth-protected-resource(".$qMcp.")?/?$ {\n"
+		."\trewrite ^ ".$issuerPath."/.well-known/oauth-protected-resource last;\n"
+		."}\n"
+		."location ~ ^/\\.well-known/(oauth-authorization-server|openid-configuration)(".$qIssuer.")?/?$ {\n"
+		."\trewrite ^/\\.well-known/([a-z-]+) ".$issuerPath."/.well-known/\$1 last;\n"
+		."}\n";
+
+	return array('apache' => $apache, 'nginx' => $nginx);
+}
+
+/**
+ * Ask the root discovery URLs whether they answer with this module's
+ * metadata: the protected resource must name this mcp.php, the
+ * authorization server this issuer, exactly (clients compare strings).
+ *
+ * @param string $mcpUrl Public URL of mcp.php
+ * @param string $issuer Public URL of oauth.php (the issuer)
+ * @return array<string, array{url: string, ok: bool, detail: string}> keyed prm, as
+ */
+function emmcpProbeRootDiscovery($mcpUrl, $issuer)
+{
+	require_once DOL_DOCUMENT_ROOT.'/core/lib/geturl.lib.php';
+
+	$urls = emmcpRootDiscoveryUrls($mcpUrl, $issuer);
+	$expect = array('prm' => array('resource', $mcpUrl), 'as' => array('issuer', $issuer));
+	$result = array();
+	foreach ($urls as $key => $url) {
+		list($field, $expected) = $expect[$key];
+		$r = getURLContent($url, 'GET', '', 1, array('Accept: application/json'), array('http', 'https'), 2, -1);
+		$json = (empty($r['curl_error_no']) && !empty($r['content'])) ? json_decode($r['content'], true) : null;
+		$got = is_array($json) && isset($json[$field]) && is_string($json[$field]) ? $json[$field] : null;
+		if ($got === $expected) {
+			$detail = '';
+		} elseif (!empty($r['curl_error_msg'])) {
+			$detail = $r['curl_error_msg'];
+		} else {
+			$detail = 'HTTP '.(isset($r['http_code']) ? $r['http_code'] : '?').($got !== null ? ', '.$field.' = '.$got : '');
+		}
+		$result[$key] = array('url' => $url, 'ok' => $got === $expected, 'detail' => $detail);
+	}
+
+	return $result;
+}

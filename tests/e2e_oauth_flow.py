@@ -31,7 +31,7 @@ BASE = os.environ.get("EMMCP_BASE", "https://doli21.dev03.e-dem.com").rstrip("/"
 LOGIN = os.environ.get("EMMCP_LOGIN", "")
 PASSWORD = os.environ.get("EMMCP_PASSWORD", "")
 MODULE_URL = os.environ.get("EMMCP_MODULE_URL", BASE + "/custom/emmcp")
-REDIRECT = "https://claude.ai/api/mcp/auth_callback"
+REDIRECT = os.environ.get("EMMCP_REDIRECT", "https://claude.ai/api/mcp/auth_callback")
 VERIFY = os.environ.get("EMMCP_VERIFY_TLS", "0") == "1"
 
 failures = 0
