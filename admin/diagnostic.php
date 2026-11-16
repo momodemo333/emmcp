@@ -63,10 +63,10 @@ if ($action == 'clearruntime') {
 }
 
 $probe = null;
-$rootProbe = null;
+$uaProbe = null;
 if ($action == 'probe') {
 	$probe = emmcpProbeAuthorizationHeader();
-	$rootProbe = emmcpProbeRootDiscovery(emmcpPublicUrl('/emmcp/mcp.php'), emmcpPublicUrl('/emmcp/oauth.php'));
+	$uaProbe = emmcpProbeDiscoveryUserAgent(emmcpPublicUrl('/emmcp/oauth.php'), emmcpPublicUrl('/emmcp/mcp.php'));
 }
 
 /*
@@ -182,27 +182,26 @@ if ($probe !== null) {
 	);
 }
 
-// Discovery at the root of the domain: clients that build the well-known
-// URLs themselves instead of following the WWW-Authenticate header (ChatGPT,
-// most probably) find nothing there unless the web server rewrites them.
-if ($rootProbe !== null) {
-	$rootOk = $rootProbe['prm']['ok'] && $rootProbe['as']['ok'];
-	$lines = array();
-	foreach ($rootProbe as $p) {
-		$lines[] = ($p['ok'] ? 'OK' : '✗').' '.dol_escape_htmltag($p['url']).($p['detail'] !== '' ? ' <span class="opacitymedium">('.dol_escape_htmltag($p['detail']).')</span>' : '');
-	}
-	$help = '';
-	if (!$rootOk) {
-		$rules = emmcpRootDiscoveryRules($mcpUrl, $issuer);
-		$help = $langs->trans('EmmcpDiagRootDiscoveryHelp')
-			.'<br><br><strong>'.$langs->trans('EmmcpDiagRootDiscoveryApache').'</strong><pre class="small" style="white-space: pre-wrap;">'.dol_escape_htmltag($rules['apache']).'</pre>'
-			.'<strong>'.$langs->trans('EmmcpDiagRootDiscoveryNginx').'</strong><pre class="small" style="white-space: pre-wrap;">'.dol_escape_htmltag($rules['nginx']).'</pre>';
+// ChatGPT follows the WWW-Authenticate header like every other client, but
+// its discovery requests carry an aiohttp User-Agent that some hosting
+// firewalls (ModSecurity) refuse with 403/406 while letting browsers through.
+if ($uaProbe !== null) {
+	$ua = dol_escape_htmltag(emmcpChatgptDiscoveryUserAgent());
+	$line = dol_escape_htmltag($uaProbe['url']).($uaProbe['detail'] !== '' ? ' <span class="opacitymedium">('.dol_escape_htmltag($uaProbe['detail']).')</span>' : '');
+	if ($uaProbe['status'] === 'ok') {
+		$value = $langs->trans('EmmcpDiagUaProbeOk', $ua).'<br>'.$line;
+	} elseif ($uaProbe['status'] === 'blocked') {
+		$value = $langs->trans('EmmcpDiagUaProbeBlocked', $ua).'<br>'.$line;
+	} elseif ($uaProbe['status'] === 'unexpected') {
+		$value = $langs->trans('EmmcpDiagUaProbeUnexpected', $ua).'<br>'.$line;
+	} else {
+		$value = $langs->trans('EmmcpDiagUaProbeUnreachable', dol_escape_htmltag($uaProbe['detail']));
 	}
 	$checks[] = array(
-		'label' => $langs->trans('EmmcpDiagRootDiscovery'),
-		'status' => $rootOk ? 'ok' : 'warning',
-		'value' => ($rootOk ? $langs->trans('EmmcpDiagRootDiscoveryOk') : $langs->trans('EmmcpDiagRootDiscoveryMissing')).'<br>'.implode('<br>', $lines),
-		'help' => $help,
+		'label' => $langs->trans('EmmcpDiagUaProbe'),
+		'status' => $uaProbe['status'] === 'ok' ? 'ok' : 'warning',
+		'value' => $value,
+		'help' => $uaProbe['status'] === 'blocked' ? dol_escape_htmltag($langs->transnoentities('EmmcpDiagUaProbeHelp', $uaProbe['url'])) : '',
 		'html' => true,
 	);
 }

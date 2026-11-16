@@ -1,6 +1,30 @@
 # Changelog
 
+## [1.10.1] - 2026-11-16
+
+### Fixed
+- **ChatGPT needs no web server rule: the 1.10.0 diagnosis was wrong, and
+  the Diagnostic tab now checks what actually breaks ChatGPT.** A ChatGPT
+  connector was tested end to end on 2026-11-16 against emMCP 1.7.0 with no
+  rule at the root of the domain. The access log shows ChatGPT following the
+  `WWW-Authenticate` header of the 401 to the protected resource metadata,
+  trying the root of the domain for the authorization server (404), then
+  falling back by itself to the module's own URLs (200), registering (201),
+  getting tokens and calling tools. The 1.10.0 check and the `.htaccess` /
+  nginx rules it handed out are removed. What did break discovery on a
+  customer site: the hosting firewall (ModSecurity) answered 406 to the
+  `aiohttp` User-Agent that ChatGPT's discovery requests carry, while
+  browsers, curl and ChatGPT's later requests got through. The check button
+  of the Diagnostic tab now fetches the module's discovery document with that
+  User-Agent and warns when the web server refuses it (403 or 406), with what
+  to ask the hosting provider. The README's ChatGPT section is rewritten from
+  the observed sequence and gains a troubleshooting paragraph with a `curl`
+  test. No database change (schema version 1.10.1, nothing to migrate).
+
 ## [1.10.0] - 2026-11-16
+
+**Superseded by 1.10.1:** its premise, that ChatGPT needs the OAuth metadata
+at the root of the domain, proved wrong once tested with ChatGPT itself.
 
 ### Added
 - **ChatGPT: the Diagnostic tab checks OAuth discovery at the root of the

@@ -159,98 +159,72 @@ function emmcpProbeAuthorizationHeader()
 }
 
 /**
- * Discovery URLs at the root of the domain for the MCP endpoint and its
- * authorization server: RFC 9728 (protected resource) and RFC 8414
- * (authorization server) "path insertion".
- *
- * A client that follows the WWW-Authenticate header of the 401 (claude.ai,
- * Claude Code) never needs them. A client that builds the well-known URLs
- * itself (ChatGPT, most probably) asks for exactly these, and a module can
- * only answer them through a rewrite rule of the web server.
- *
- * @param string $mcpUrl Public URL of mcp.php
- * @param string $issuer Public URL of oauth.php (the issuer)
- * @return array{prm: string, as: string}
+ * User-Agent ChatGPT sends while it discovers the OAuth metadata. Seen in
+ * the access log of a working connector on 2026-11-16: the first requests
+ * (401 on mcp.php, protected resource, authorization server) carry it; the
+ * later ones carry openai-connectors-oauth/1.0 and openai-mcp/1.0.0.
  */
-function emmcpRootDiscoveryUrls($mcpUrl, $issuer)
+function emmcpChatgptDiscoveryUserAgent()
 {
-	$p = parse_url($mcpUrl);
-	$origin = $p['scheme'].'://'.$p['host'].(isset($p['port']) ? ':'.$p['port'] : '');
-
-	return array(
-		'prm' => $origin.'/.well-known/oauth-protected-resource'.(string) parse_url($mcpUrl, PHP_URL_PATH),
-		'as' => $origin.'/.well-known/oauth-authorization-server'.(string) parse_url($issuer, PHP_URL_PATH),
-	);
+	return 'Python/3.14 aiohttp/3.14.4';
 }
 
 /**
- * Web server rules that answer the root discovery URLs from the module,
- * through an internal rewrite (no redirection, the issuer stays the same).
+ * Read the answer of a discovery request into a verdict.
  *
- * The targets are absolute URL paths, so the rules hold wherever Dolibarr
- * lives on the domain (/custom/, a sub-path, an alternative custom folder).
- * They only match the OAuth metadata names: /.well-known/acme-challenge/
- * (Let's Encrypt) and every other well-known URL are left alone.
+ * Hosting firewalls (ModSecurity rule sets) commonly turn away User-Agents
+ * that look like a script library with 403 or 406; ChatGPT then stops at
+ * "Unable to detect OAuth settings" although the module answers everyone else.
  *
- * @param string $mcpUrl Public URL of mcp.php
- * @param string $issuer Public URL of oauth.php (the issuer)
- * @return array{apache: string, nginx: string}
+ * @param int    $httpCode         HTTP status, 0 when the request failed
+ * @param string $content          Response body
+ * @param string $curlError        Transport error, '' when none
+ * @param string $expectedResource Public URL of mcp.php
+ * @return array{status: string, detail: string} status: ok | blocked | unexpected | unreachable
  */
-function emmcpRootDiscoveryRules($mcpUrl, $issuer)
+function emmcpClassifyDiscoveryAnswer($httpCode, $content, $curlError, $expectedResource)
 {
-	$mcpPath = (string) parse_url($mcpUrl, PHP_URL_PATH);
-	$issuerPath = (string) parse_url($issuer, PHP_URL_PATH);
-	$qMcp = preg_quote($mcpPath, '#');
-	$qIssuer = preg_quote($issuerPath, '#');
+	if ($curlError !== '') {
+		return array('status' => 'unreachable', 'detail' => $curlError);
+	}
+	$httpCode = (int) $httpCode;
+	if ($httpCode === 403 || $httpCode === 406) {
+		return array('status' => 'blocked', 'detail' => 'HTTP '.$httpCode);
+	}
+	$json = $content !== '' ? json_decode($content, true) : null;
+	$resource = is_array($json) && isset($json['resource']) && is_string($json['resource']) ? $json['resource'] : null;
+	if ($httpCode === 200 && $resource === $expectedResource) {
+		return array('status' => 'ok', 'detail' => '');
+	}
 
-	$apache = "# emMCP: OAuth discovery at the root of the domain (RFC 9728, RFC 8414)\n"
-		."<IfModule mod_rewrite.c>\n"
-		."\tRewriteEngine On\n"
-		."\tRewriteRule ^\\.well-known/oauth-protected-resource(".$qMcp.")?/?$ ".$issuerPath."/.well-known/oauth-protected-resource [L]\n"
-		."\tRewriteRule ^\\.well-known/(oauth-authorization-server|openid-configuration)(".$qIssuer.")?/?$ ".$issuerPath."/.well-known/$1 [L]\n"
-		."</IfModule>\n";
-
-	$nginx = "# emMCP: OAuth discovery at the root of the domain (RFC 9728, RFC 8414)\n"
-		."location ~ ^/\\.well-known/oauth-protected-resource(".$qMcp.")?/?$ {\n"
-		."\trewrite ^ ".$issuerPath."/.well-known/oauth-protected-resource last;\n"
-		."}\n"
-		."location ~ ^/\\.well-known/(oauth-authorization-server|openid-configuration)(".$qIssuer.")?/?$ {\n"
-		."\trewrite ^/\\.well-known/([a-z-]+) ".$issuerPath."/.well-known/\$1 last;\n"
-		."}\n";
-
-	return array('apache' => $apache, 'nginx' => $nginx);
+	return array('status' => 'unexpected', 'detail' => 'HTTP '.$httpCode.($resource !== null ? ', resource = '.$resource : ''));
 }
 
 /**
- * Ask the root discovery URLs whether they answer with this module's
- * metadata: the protected resource must name this mcp.php, the
- * authorization server this issuer, exactly (clients compare strings).
+ * Fetch this module's protected resource metadata from its public URL with
+ * ChatGPT's discovery User-Agent, to catch a hosting firewall that blocks it.
  *
+ * The request leaves from the server itself: a block is proof, a pass is a
+ * strong hint only (a firewall in front of the host, or one that exempts
+ * local addresses, may treat outside requests differently).
+ *
+ * @param string $issuer Public URL of oauth.php
  * @param string $mcpUrl Public URL of mcp.php
- * @param string $issuer Public URL of oauth.php (the issuer)
- * @return array<string, array{url: string, ok: bool, detail: string}> keyed prm, as
+ * @return array{url: string, status: string, detail: string}
  */
-function emmcpProbeRootDiscovery($mcpUrl, $issuer)
+function emmcpProbeDiscoveryUserAgent($issuer, $mcpUrl)
 {
 	require_once DOL_DOCUMENT_ROOT.'/core/lib/geturl.lib.php';
 
-	$urls = emmcpRootDiscoveryUrls($mcpUrl, $issuer);
-	$expect = array('prm' => array('resource', $mcpUrl), 'as' => array('issuer', $issuer));
-	$result = array();
-	foreach ($urls as $key => $url) {
-		list($field, $expected) = $expect[$key];
-		$r = getURLContent($url, 'GET', '', 1, array('Accept: application/json'), array('http', 'https'), 2, -1);
-		$json = (empty($r['curl_error_no']) && !empty($r['content'])) ? json_decode($r['content'], true) : null;
-		$got = is_array($json) && isset($json[$field]) && is_string($json[$field]) ? $json[$field] : null;
-		if ($got === $expected) {
-			$detail = '';
-		} elseif (!empty($r['curl_error_msg'])) {
-			$detail = $r['curl_error_msg'];
-		} else {
-			$detail = 'HTTP '.(isset($r['http_code']) ? $r['http_code'] : '?').($got !== null ? ', '.$field.' = '.$got : '');
-		}
-		$result[$key] = array('url' => $url, 'ok' => $got === $expected, 'detail' => $detail);
-	}
+	$url = $issuer.'/.well-known/oauth-protected-resource';
+	// A User-Agent header replaces the one getURLContent sets with CURLOPT_USERAGENT.
+	$r = getURLContent($url, 'GET', '', 1, array('Accept: application/json', 'User-Agent: '.emmcpChatgptDiscoveryUserAgent()), array('http', 'https'), 2, -1);
+	$verdict = emmcpClassifyDiscoveryAnswer(
+		isset($r['http_code']) ? (int) $r['http_code'] : 0,
+		isset($r['content']) ? (string) $r['content'] : '',
+		!empty($r['curl_error_no']) ? (string) $r['curl_error_msg'] : '',
+		$mcpUrl
+	);
 
-	return $result;
+	return array('url' => $url) + $verdict;
 }

@@ -123,56 +123,46 @@ consentement, puis se connecte — sans clé à saisir.
 ## ChatGPT (connecteur personnalisé, OAuth)
 
 Dans ChatGPT (mode développeur → créer un connecteur / une app, authentification
-OAuth), l'URL est la même : `https://<instance>/custom/emmcp/mcp.php`.
+OAuth, champs Client ID et Client secret vides), l'URL est la même :
+`https://<instance>/custom/emmcp/mcp.php`. Aucune règle de serveur web n'est
+nécessaire.
 
-OpenAI ne documente pas l'ordre exact de sa découverte, mais tout indique
-(journaux publiés par d'autres éditeurs de serveurs MCP, et le message qu'il
-affiche) que ChatGPT ne se contente pas de l'en-tête `WWW-Authenticate` de la
-réponse 401 : il cherche les métadonnées OAuth aux adresses « well-known »
-**de la racine du domaine** (RFC 9728 et RFC 8414, « path insertion »), par exemple
-`https://<instance>/.well-known/oauth-protected-resource/custom/emmcp/mcp.php`.
-Un module Dolibarr ne peut pas répondre à la racine du domaine : sans règle du
-serveur web, ChatGPT affiche « Impossible de détecter les paramètres OAuth ».
-claude.ai et Claude Code n'ont pas besoin de ces règles.
+Testé de bout en bout le 16/11/2026 (emMCP 1.7.0, sans aucune règle à la racine
+du domaine). Le journal d'accès du serveur montre la séquence de ChatGPT :
 
-L'onglet **Diagnostic** vérifie ces adresses (bouton « Vérifier l'en-tête
-Authorization et la découverte OAuth ») et, si elles ne répondent pas, affiche
-les règles **déjà adaptées au chemin de l'instance**. Pour une instance à la
-racine du domaine, avec le module dans `custom/` :
+1. `POST mcp.php` → 401, avec l'en-tête `WWW-Authenticate` ;
+2. ChatGPT **suit cet en-tête** : `GET oauth.php/.well-known/oauth-protected-resource` → 200 ;
+3. il essaie d'abord la racine du domaine
+   (`/.well-known/oauth-authorization-server/custom/emmcp/oauth.php` → 404), puis se
+   replie de lui-même sur les adresses du module
+   (`oauth.php/.well-known/oauth-authorization-server` et `…/openid-configuration` → 200) ;
+4. `POST oauth.php/register` (enregistrement dynamique) → 201, connexion Dolibarr et
+   consentement, `POST oauth.php/token` → 200, puis appels `mcp.php` → 200.
 
-Apache — en tête du `.htaccess` du dossier racine du domaine (sous Plesk,
-`httpdocs/.htaccess`) :
+Les 404 à la racine du domaine sont donc normaux et sans effet.
 
-```apache
-# emMCP: OAuth discovery at the root of the domain (RFC 9728, RFC 8414)
-<IfModule mod_rewrite.c>
-	RewriteEngine On
-	RewriteRule ^\.well-known/oauth-protected-resource(/custom/emmcp/mcp\.php)?/?$ /custom/emmcp/oauth.php/.well-known/oauth-protected-resource [L]
-	RewriteRule ^\.well-known/(oauth-authorization-server|openid-configuration)(/custom/emmcp/oauth\.php)?/?$ /custom/emmcp/oauth.php/.well-known/$1 [L]
-</IfModule>
+### Dépannage : « Impossible de détecter les paramètres OAuth »
+
+Les requêtes de découverte de ChatGPT (étapes 1 à 3) portent le User-Agent
+`Python/3.14 aiohttp/…`. Certains pare-feu d'hébergement (règles ModSecurity) le
+refusent avec un 403 ou un 406, alors que le navigateur, curl et les étapes
+suivantes de ChatGPT passent. ChatGPT affiche alors « Impossible de détecter les
+paramètres OAuth », bien que le module réponde correctement.
+
+Test, depuis n'importe quelle machine :
+
+```bash
+curl -A "aiohttp/3.14" -i https://<instance>/custom/emmcp/oauth.php/.well-known/oauth-protected-resource
 ```
 
-nginx seul, ou Plesk sans `.htaccess` (Sites Web & Domaines → Paramètres
-Apache & nginx → Directives nginx supplémentaires) :
-
-```nginx
-# emMCP: OAuth discovery at the root of the domain (RFC 9728, RFC 8414)
-location ~ ^/\.well-known/oauth-protected-resource(/custom/emmcp/mcp\.php)?/?$ {
-	rewrite ^ /custom/emmcp/oauth.php/.well-known/oauth-protected-resource last;
-}
-location ~ ^/\.well-known/(oauth-authorization-server|openid-configuration)(/custom/emmcp/oauth\.php)?/?$ {
-	rewrite ^/\.well-known/([a-z-]+) /custom/emmcp/oauth.php/.well-known/$1 last;
-}
-```
-
-Une seule des deux suffit. Ce sont des réécritures **internes** : pas de
-redirection 301/302, qui ferait changer l'adresse et ne fournirait pas les
-métadonnées de la ressource protégée. Seules ces adresses OAuth sont touchées ;
-la validation Let's Encrypt (`/.well-known/acme-challenge/`) reste servie par
-Plesk. Règles éprouvées sur un Apache 2.4 derrière nginx reproduisant la
-configuration générée par Plesk Obsidian, et avec le client de référence du SDK
-MCP (`@modelcontextprotocol/sdk`) : sans règle et sans l'en-tête, la découverte
-échoue ; avec l'une ou l'autre règle, elle aboutit.
+La réponse doit être `200` avec un JSON qui contient `"resource"`, pas `403` ni
+`406`. Si elle est refusée, demandez à l'hébergeur de ne plus bloquer ce
+User-Agent pour le site (ou désactivez la règle dans le pare-feu applicatif de
+Plesk si vous gérez le serveur). Le bouton « Vérifier l'en-tête Authorization et
+la découverte OAuth » de l'onglet **Diagnostic** fait le même test depuis le
+serveur lui-même : un refus y est une preuve ; un succès est un bon indice, car
+un pare-feu placé en amont, ou qui exempte les adresses locales, peut traiter
+autrement les requêtes venues d'OpenAI.
 
 ## Endpoints OAuth (`oauth.php`)
 
