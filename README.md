@@ -1,8 +1,53 @@
-# emMCP — Serveur MCP distant pour Dolibarr (POC)
+# emMCP — Serveur MCP distant pour Dolibarr
 
-Expose une instance Dolibarr comme **serveur MCP** (Model Context Protocol,
-transport Streamable HTTP) consommable par Claude Code, l'API Anthropic
-(`mcp_servers`), et tout client MCP compatible HTTP.
+Version 1.10.2. Expose une instance Dolibarr comme **serveur MCP** (Model
+Context Protocol, transport Streamable HTTP) consommable par claude.ai,
+Claude Desktop, ChatGPT (connecteurs OAuth), Claude Code, l'API Anthropic
+(`mcp_servers`) et tout client MCP compatible HTTP.
+
+emMCP est un module **autonome** : il embarque son propre moteur MCP et ses
+dépendances, isolées (voir plus bas). Aucun autre module E-dem n'est requis.
+
+## Prérequis
+
+- Dolibarr 16.0 ou plus récent ; PHP 8.1 ou plus récent.
+- Module **API REST** de Dolibarr activé (les outils passent par lui).
+- Accès en **HTTPS** (obligatoire pour les connecteurs OAuth).
+- MySQL ou MariaDB pour l'option de requêtes SQL en lecture seule (les autres
+  outils fonctionnent quelle que soit la base).
+
+## Installation
+
+1. Téléchargez le ZIP (DoliStore ou https://www.e-dem.com) et décompressez-le
+   dans `htdocs/custom/` : le dossier final est `htdocs/custom/emmcp/`. Le ZIP
+   contient déjà toutes les dépendances (`vendor/`) : rien d'autre à installer.
+2. Activez **emMCP** dans *Accueil > Configuration > Modules/Applications*
+   (ainsi que le module **API REST** s'il ne l'est pas).
+3. Ouvrez la configuration du module : l'onglet **Paramètres** affiche l'URL
+   exacte du connecteur et des exemples prêts à copier.
+
+**Mise à jour** : décompressez la nouvelle version par-dessus l'ancienne. Les
+tables du module sont migrées automatiquement à la première requête qui suit ;
+inutile de désactiver/réactiver le module ou de repasser par les onglets.
+Vérifiez la version et la ligne « Schéma de base » dans l'onglet **Diagnostic**.
+
+## Onglets de configuration
+
+- **Paramètres** : URL du serveur MCP, méthodes d'authentification, état du
+  module API REST et du moteur MCP, exemples pour claude.ai, Claude Code et un
+  client MCP générique (`mcp.json`).
+- **Accès SQL MCP** : interrupteur global, plafonds (lignes, durée, taille),
+  journalisation par empreinte seule, exception multi-société, liste des
+  utilisateurs autorisés (voir plus bas).
+- **Activité MCP** : journal des appels (paramètres enregistrés ou non,
+  durée de conservation, purge), limite d'appels par utilisateur, seuil
+  d'alerte par courriel, destinataire de l'alerte, délai entre deux alertes.
+- **Accès accordés** : chaque client connecté par OAuth (utilisateur, client,
+  dates d'octroi, de renouvellement et d'expiration) avec un bouton
+  **Révoquer** qui coupe l'accès immédiatement.
+- **Diagnostic** : vérifications, journal des connexions et rapport pour le
+  support (voir plus bas).
+- **À propos**.
 
 ## Fonctionnement
 
@@ -14,18 +59,23 @@ transport Streamable HTTP) consommable par Claude Code, l'API Anthropic
   - **Clé API** d'un utilisateur Dolibarr, via `Authorization: Bearer <clé>`
     (recommandé) ou header `DOLAPIKEY` — pour Claude Code, l'API Anthropic,
     et tout client MCP acceptant un header custom.
-  - **OAuth 2.1** (`oauth.php`) — pour les connecteurs claude.ai web/desktop
+  - **OAuth 2.1** (`oauth.php`) — pour les connecteurs claude.ai, Claude Desktop et ChatGPT
     qui n'acceptent qu'OAuth : découverte automatique (RFC 9728 + RFC 8414),
     enregistrement dynamique du client (RFC 7591), code d'autorisation avec
     PKCE S256, rotation des refresh tokens. L'utilisateur se connecte avec
     son compte Dolibarr et consent ; aucune clé à copier.
   Dans les deux cas, les tools agissent via l'API REST Dolibarr avec les
   permissions de l'utilisateur.
-- **Tools** : les 20 tools du paquet
+- **Tools** : ceux du moteur
   [dolibarr-mcp-server](https://github.com/momodemo333/dolibarr-mcp-server)
-  (CRUD générique, explorateur d'API, documents, lignes, actions métier,
-  extrafields, contacts, projets, génération de fichiers), plus deux tools
-  de **requêtes SQL en lecture seule** désactivés par défaut (voir ci-dessous).
+  embarqué — CRUD générique (`dolibarr_list`, `dolibarr_get`,
+  `dolibarr_create`, `dolibarr_create_from`, `dolibarr_update`,
+  `dolibarr_delete`), lignes de documents, temps passé
+  (`dolibarr_add_time_spent`, `dolibarr_update_time_spent`), actions métier,
+  contacts, extrafields, documents et génération PDF, création de fichiers,
+  informations sur l'instance (`dolibarr_environment`) et explorateur d'API —,
+  plus deux tools de **requêtes SQL en lecture seule** désactivés par défaut
+  (voir ci-dessous) et ceux qu'ajoutent d'autres modules (voir *Extensions*).
 
 ## Requêtes SQL en lecture seule (optionnel, désactivé par défaut)
 
@@ -39,12 +89,12 @@ permissions Dolibarr de l'appelant, une requête SQL n'hérite de rien. L'accès
 est donc reconstruit explicitement et **quatre conditions doivent toutes être
 réunies** :
 
-1. la fonctionnalité est activée globalement (onglet **Accès SQL** de la
+1. la fonctionnalité est activée globalement (onglet **Accès SQL MCP** de la
    configuration du module) ;
 2. l'utilisateur détient le droit Dolibarr *Exécuter des requêtes SQL en lecture
    seule via MCP* — **être administrateur ne suffit pas**, le droit doit être
    attribué ;
-3. l'utilisateur est explicitement coché dans la liste de l'onglet Accès SQL ;
+3. l'utilisateur est explicitement coché dans la liste de l'onglet Accès SQL MCP ;
 4. le module multicompany n'est pas actif (ou l'exception a été activée) — une
    requête SQL traverse les lignes de toutes les entités, elle ne peut pas être
    filtrée par entité de façon fiable.
@@ -61,7 +111,8 @@ Garde-fous en place : une seule instruction par appel, aucune écriture ni DDL,
 aucune lecture verrouillante (`FOR UPDATE`, `FOR SHARE`, `LOCK IN SHARE MODE`),
 colonnes de credentials refusées où qu'elles apparaissent — noms exacts et
 motifs, donc `smtp_password` ou `access_token` aussi bien que `api_key` —,
-**`SELECT *` interdit sur toute table** (`COUNT(*)` reste autorisé), requêtes
+`SELECT *` accepté seulement si aucune des colonnes qu'il recouvre n'est
+sensible (sinon refusé en nommant la colonne), requêtes
 limitées à la base courante (`autre_base.llx_societe` refusé), commentaires
 exécutables et optimizer hints refusés, tables d'authentification et de session
 inaccessibles, exécution sur une connexion dédiée en transaction de lecture
@@ -69,41 +120,19 @@ seule avec un `sql_mode` normalisé et un timeout obligatoire, plafonds de ligne
 et de taille imposés par le serveur, et journal d'audit
 (`llx_emmcp_sql_audit`) qui n'enregistre **jamais** les résultats.
 
-L'agent doit donc nommer les colonnes dont il a besoin ; c'est à cela que sert
-le tool d'introspection du schéma.
+Le tool d'introspection du schéma permet à l'agent de choisir les colonnes
+dont il a besoin.
 
-### Compte MySQL dédié — prérequis obligatoire
+### Connexion utilisée
 
-L'accès SQL exige un **compte MySQL distinct de celui de Dolibarr, ne disposant
-que du privilège `SELECT`**, à renseigner dans l'onglet Accès SQL. Tant qu'il
-n'est pas configuré, aucune requête n'est exécutée, même le commutateur activé.
-
-Ce n'est pas une précaution facultative : une transaction en lecture seule
-empêche les écritures de données mais **pas le DDL** (`CREATE`, `DROP`, `ALTER`
-provoquent un commit implicite). Un compte restreint au `SELECT` est la seule
-configuration où c'est le serveur, et non le code applicatif, qui impose la
-lecture seule. Le module refuse d'ailleurs la connexion si le serveur
-authentifie malgré tout le compte applicatif.
-
-Le module **vérifie ces privilèges** plutôt que de les supposer : à chaque
-connexion il lit `SHOW GRANTS` et refuse de fonctionner si le compte détient
-autre chose que `USAGE` global et `SELECT` sur cette seule base. Un compte avec
-`SELECT` global, `INSERT`, `CREATE`, `EXECUTE`, `FILE`, `GRANT OPTION` ou un rôle
-est rejeté — un compte *dédié* n'est pas nécessairement un compte *restreint*.
-
-Le compte ne doit donc avoir ni `EXECUTE`, ni `FILE`, ni aucun privilège DML ou
-DDL :
-
-```sql
-CREATE USER 'dolibarr_ro'@'%' IDENTIFIED BY '<mot de passe>';
-GRANT SELECT ON `votre_base`.* TO 'dolibarr_ro'@'%';
-```
-
-## Prérequis (POC)
-
-- Module **API REST** Dolibarr activé.
-- Module **Dalfred** présent (le paquet MCP embarqué de Dalfred est réutilisé).
-  Une release standalone embarquera son propre `vendor/`.
+Aucun compte MySQL supplémentaire n'est à créer (depuis la 1.3.0) : les
+requêtes utilisent les identifiants de Dolibarr, sur une session mysqli
+séparée, de sorte que le timeout, le `sql_mode` et la transaction en lecture
+seule ne débordent jamais sur la connexion de l'application. Une transaction
+en lecture seule n'empêche pas le DDL : la lecture seule est donc garantie par
+le logiciel (analyse lexicale, analyseur SQL avec liste blanche de clauses,
+politique sur chaque table, colonne et fonction, contrôle final que
+l'instruction commence par `SELECT` ou `WITH`).
 
 ## Exemple : Claude Code (clé API)
 
@@ -113,12 +142,18 @@ claude mcp add dolibarr --transport http \
   --header "Authorization: Bearer VOTRE_CLE_API"
 ```
 
-## Exemple : connecteur claude.ai (OAuth)
+## Exemple : connecteur claude.ai / Claude Desktop (OAuth)
 
 Dans claude.ai : Paramètres → Connecteurs → « Ajouter un connecteur
 personnalisé », URL `https://<instance>/custom/emmcp/mcp.php`. Claude
 découvre l'OAuth, ouvre la page de connexion Dolibarr et l'écran de
 consentement, puis se connecte — sans clé à saisir.
+
+Les connecteurs ajoutés dans claude.ai sont aussi disponibles dans Claude
+Desktop. Pour retirer un accès donné par OAuth : onglet **Accès accordés**,
+bouton **Révoquer** ; supprimer la clé API REST de l'utilisateur ou désactiver
+son compte met aussi fin à tous les accès OAuth qu'il a donnés, et seule la
+désactivation du compte l'empêche de se reconnecter.
 
 ## ChatGPT (connecteur personnalisé, OAuth)
 
@@ -201,7 +236,7 @@ espaces de noms (et pour un moteur non préfixé), `lib/emmcp_runtime.php`
 vérifie avant usage que chaque type clé vient bien du moteur et répond sinon
 par une erreur JSON qui nomme le fichier fautif.
 
-## Limites connues du POC
+## Limites connues
 
 - Découverte des tools re-scannée à chaque requête (pas de cache PSR-16).
 - Pas de gestion multi-entité (multicompany). L'accès SQL en lecture seule est
@@ -219,3 +254,22 @@ modifier emMCP : il déclare le contexte de hook `emmcp` et implémente
 `$parameters['user']` est l'utilisateur de la session MCP, droits chargés : les
 outils de l'extension s'exécutent dans Dolibarr en son nom et doivent vérifier ses droits.
 Exemple : le module emMCP Extensions (outils Todo).
+
+## Dépannage
+
+- **Point de départ : l'onglet Diagnostic.** Une ligne en alerte et la raison
+  indiquée dans le journal des connexions désignent en général la cause.
+- **Après une mise à jour par décompression depuis une version 1.10.1 ou
+  antérieure, rien n'a changé** (Diagnostic affiche l'ancienne version,
+  comportement incohérent) : le cache d'opcodes de PHP (opcache) peut encore
+  servir l'ancien code. Redémarrez PHP (PHP-FPM, ou Apache si PHP tourne en
+  module), ou demandez-le à votre hébergeur. Corrigé à partir de la 1.10.2 :
+  chaque version porte désormais ses propres dates de fichiers.
+- **Tables du module** : elles sont migrées automatiquement à la première
+  requête qui suit une mise à jour ; il n'est pas nécessaire de repasser par
+  les onglets. La ligne « Schéma de base » du Diagnostic doit être « OK ».
+- **ChatGPT** : voir *Dépannage : « Impossible de détecter les paramètres
+  OAuth »* plus haut.
+- **Support** : support@e-dem.com — https://www.e-dem.com. Joignez le
+  *Rapport pour le support* de l'onglet Diagnostic (il ne contient aucun
+  secret).
