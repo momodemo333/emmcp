@@ -31,11 +31,15 @@ declare(strict_types=1);
 return [
     'prefix' => 'EmmcpVendor',
 
-    'exclude-namespaces' => [
-        'DolibarrMcp',
-        'Mcp',
-        'Symfony\Polyfill',
-    ],
+    // Anchored regexes, not plain names: php-scoper 0.18.17 matches a plain
+    // 'Mcp' against ANY namespace segment, case-insensitively, so a dependency
+    // namespace such as Foo\MCP\ would be left unprefixed (seen in Dalfred
+    // with NeuronAI\MCP\). The build also checks that no other namespace
+    // under vendor/ escaped the prefix (tools/check-scoped-namespaces.sh).
+    'exclude-namespaces' => array_map(
+        static fn (string $ns): string => '~^'.preg_quote($ns, '~').'(\\\\|$)~',
+        ['DolibarrMcp', 'Mcp', 'Symfony\\Polyfill']
+    ),
 
     // Polyfill entry points declare global functions/classes guarded by
     // function_exists()/class_exists(); scoping them would only break that guard.

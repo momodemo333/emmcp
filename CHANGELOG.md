@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.10.2] - 2026-11-17
+
+### Fixed
+- **Upgrading by unzipping over the previous version could leave PHP running
+  the previous version's code.** Since 1.2.0 every file of the package carried
+  the same fixed date, release after release (this made the ZIP reproducible).
+  `unzip` restores that date, so the files of the new version looked unchanged
+  to PHP's opcode cache, which kept serving the old code until PHP was
+  restarted: a mix of old and new files, and database migrations that did not
+  run. Reproduced on a test install going from 1.10.1 to 1.10.2. The package's
+  files now carry the date of the release's commit, which still makes two
+  builds of the same sources identical, and changes with every version.
+  Installs that upgraded this way and still behave oddly are fixed by this
+  upgrade, or at once by restarting PHP (PHP-FPM, or the web server).
+- **Upgrading by unzipping over an older version now removes the files that
+  version left behind.** Unzipping adds and replaces files but never deletes
+  any, so an install that started on 1.0.0 still carried the old OAuth and SQL
+  classes (`class/emmcpoauthserver.class.php`, `class/emmcpsql*.class.php`),
+  an old runtime class and a few development files of dependencies, all under
+  the web root. None was loaded by the module. The first request after the
+  upgrade now deletes exactly those files (a fixed list, only regular files,
+  only inside the module directory); a file the web server may not delete is
+  logged and left in place, and never blocks the upgrade. The build refuses to
+  package a file on that list.
+- **Packaging safeguards.** The dependency prefixing step now names its
+  exceptions exactly: php-scoper took the plain exclusion `Mcp` to mean any
+  namespace segment `MCP` (seen in Dalfred on `NeuronAI\MCP\`). No dependency
+  of emMCP had such a namespace, and the package content is unchanged; the
+  build now also fails if any namespace of the bundled dependencies is left
+  without the prefix. The build also fails when a bundled dependency directory
+  is not its own git checkout: an unzipped copy used to be reported as clean.
+  It also refuses to package the MCP runtime's standalone server (`public/`,
+  `bin/`), which emMCP has never shipped but which answers without
+  authentication. No database change (schema version 1.10.2, nothing to
+  migrate).
+
 ## [1.10.1] - 2026-11-16
 
 ### Fixed

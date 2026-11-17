@@ -131,20 +131,49 @@ PHP_SCOPER ?= $(HOME)/.local/share/php-tools/php-scoper.phar
 PHP_SCOPER_VERSION ?= 0.18.17
 SCOPE_PREFIX := EmmcpVendor
 
-# Fixed timestamp for every entry in the ZIP. Any constant works; what matters
-# is that it does not change between builds of the same sources.
+# Timestamp given to every entry in the ZIP: the date of the emMCP commit being
+# built. It must not change between builds of the same sources (otherwise the
+# checksum proves nothing), and it MUST change from one release to the next.
+#
+# Until 1.10.1 it was the constant 1700000000. `unzip` restores those mtimes,
+# so a customer unzipping a new version over the old one got files with the
+# very same mtime as before, and PHP's opcache, which only revalidates a script
+# whose mtime changed, kept running the previous version's code until PHP was
+# restarted: half-upgraded installs, migrations not run. Seen on doli21 with
+# 1.10.1 -> 1.10.2 (2026-11-17). The commit date is fixed for a given tree and
+# moves forward with every release.
 #
 # Note that the checksum legitimately changes when the embedded runtime is
 # re-committed: Composer records the package's git HEAD in
 # vendor/composer/installed.php, so the ZIP identifies the exact runtime it
 # carries. Reproducibility here means "same sources, same checksum", which is
 # what makes the checksum worth publishing.
-SOURCE_DATE_EPOCH ?= 1700000000
+SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct HEAD 2>/dev/null)
+ifeq ($(strip $(SOURCE_DATE_EPOCH)),)
+$(error SOURCE_DATE_EPOCH: cannot read the date of the current commit (not a git checkout?))
+endif
 
 # Set to the tag the runtime must be built from. Left empty, a clean working
 # tree at the expected version is accepted, which is what dev builds need. The
 # release target sets it, so a published ZIP can only come from a tagged commit.
 REQUIRED_RUNTIME_TAG ?=
+
+# A dependency directory must be the root of its own git checkout before its
+# cleanliness or its tag can mean anything. Otherwise `git status --porcelain`
+# either fails and prints nothing, which the checks below read as "clean", or
+# answers for an enclosing repository: ../dalfred/dolibarr-mcp-server is
+# gitignored by dalfred, so an unzipped copy there was reported clean. Seen when
+# ../dalfred was temporarily an installed ZIP (2026-11-17).
+# $(1) = directory, $(2) = human name
+define require_git_root
+top=$$(cd "$(1)" && git rev-parse --show-toplevel 2>/dev/null) || top=""; \
+	here=$$(cd "$(1)" && pwd -P); \
+	if [ -z "$$top" ] || [ "$$(cd "$$top" && pwd -P)" != "$$here" ]; then \
+		echo "$(RED)$(2): $(1) is not the root of a git checkout$(NC)"; \
+		echo "$(YELLOW)Clone the repository there (an unzipped copy or a subfolder of another repo cannot be verified).$(NC)"; \
+		exit 1; \
+	fi
+endef
 
 check-runtime:
 	@test -d "$(MCP_PACKAGE_SRC)" || (echo "$(RED)MCP package source not found: $(MCP_PACKAGE_SRC)$(NC)" && exit 1)
@@ -154,6 +183,7 @@ check-runtime:
 		echo "$(YELLOW)Point MCP_PACKAGE_SRC at the right checkout, or set EXPECTED_RUNTIME_VERSION.$(NC)"; \
 		exit 1; \
 	fi
+	@$(call require_git_root,$(MCP_PACKAGE_SRC),dolibarr-mcp-server)
 	@cd $(MCP_PACKAGE_SRC) && \
 	if [ -n "$$(git status --porcelain)" ]; then \
 		echo "$(RED)Runtime checkout is dirty; commit or stash before building.$(NC)"; \
@@ -174,6 +204,7 @@ check-runtime:
 
 check-oauth:
 	@test -d "$(LIB_OAUTH_SRC)/src" || (echo "$(RED)dolibarr-mcp-oauth source not found: $(LIB_OAUTH_SRC)$(NC)" && exit 1)
+	@$(call require_git_root,$(LIB_OAUTH_SRC),dolibarr-mcp-oauth)
 	@cd $(LIB_OAUTH_SRC) && \
 	if [ -n "$$(git status --porcelain)" ]; then \
 		echo "$(RED)dolibarr-mcp-oauth checkout is dirty; commit or stash before building.$(NC)"; \
@@ -203,6 +234,7 @@ check-oauth:
 # $(1) = directory, $(2) = human name, $(3) = expected version
 define check_tagged_lib
 	@test -d "$(1)/src" || (echo "$(RED)$(2) source not found: $(1)$(NC)" && exit 1)
+	@$(call require_git_root,$(1),$(2))
 	@cd $(1) && \
 	if [ -n "`git status --porcelain`" ]; then \
 		echo "$(RED)$(2) checkout is dirty; commit or stash before building.$(NC)"; \
@@ -292,12 +324,14 @@ build-release: check-runtime check-oauth check-sql check-audit check-scoper
 		--output-dir $(CURDIR)/$(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server --no-interaction --quiet
 	@rm -rf $(BUILD_DIR)/scope-src
 	@rm -f $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server/vendor/scoper-autoload.php
+	@bash tools/check-scoped-namespaces.sh $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server $(SCOPE_PREFIX)
 	@cd $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server && \
 		composer dump-autoload --no-dev --optimize --classmap-authoritative --no-interaction --quiet
 	@php tools/rehash-autoload-files.php $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server $(SCOPE_PREFIX)
 	@printf '%s\n' "$(SCOPE_PREFIX)" > $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server/vendor/emmcp-scope-prefix.txt
 	@php tests/runtime_isolation_test.php $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server
 
+	@php tests/obsolete_files_test.php >/dev/null || (echo "$(RED)tests/obsolete_files_test.php failed$(NC)"; exit 1)
 	@echo "[5/7] Pruning dev cruft..."
 	@find $(BUILD_DIR)/$(MODULE_NAME) -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
 	@find $(BUILD_DIR)/$(MODULE_NAME) -type f \( -name ".gitignore" -o -name ".gitattributes" \) -delete 2>/dev/null || true
@@ -311,6 +345,25 @@ build-release: check-runtime check-oauth check-sql check-audit check-scoper
 		fi; \
 	done
 	@echo "  all $(words $(CRITICAL_FILES)) critical files present"
+# The runtime's own public/ and bin/ are a standalone MCP server that answers
+# WITHOUT authentication and takes the Dolibarr URL to call from a header;
+# under the module they would be served by the web server. Found shipped in
+# Dalfred (2.34.0 and earlier). Step 2 copies only src/, but a broader copy
+# must never let them in.
+	@for d in public bin; do \
+		if [ -e "$(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server/$$d" ]; then \
+			echo "$(RED)FORBIDDEN in build: vendor/dolibarr-mcp-server/$$d (unauthenticated standalone server)$(NC)"; exit 1; \
+		fi; \
+	done
+# Files the upgrade deletes on customer installs (EmmcpMigrations::OBSOLETE_FILES)
+# must not be shipped again, or each upgrade would delete a file just installed.
+	@php -r 'require "class/emmcpmigrations.class.php"; echo implode("\n", EmmcpMigrations::OBSOLETE_FILES), "\n";' | \
+		while read -r f; do \
+			if [ -n "$$f" ] && [ -e "$(BUILD_DIR)/$(MODULE_NAME)/$$f" ]; then \
+				echo "$(RED)Build ships $$f, which upgrades delete (EmmcpMigrations::OBSOLETE_FILES)$(NC)"; exit 1; \
+			fi; \
+		done
+	@echo "  no standalone server, no file listed as obsolete"
 
 	@echo "[7/7] Creating ZIP (reproducible)..."
 	@rm -f $(RELEASE_DIR)/$(RELEASE_FILENAME) $(RELEASE_DIR)/$(RELEASE_FILENAME).sha256

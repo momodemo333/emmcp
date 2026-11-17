@@ -38,9 +38,45 @@ class EmmcpMigrations
 	 * Must be bumped together with $this->version in the module descriptor.
 	 * Forgetting one of the two silently stops migrations from running.
 	 */
-	const MODULE_VERSION = '1.10.1';
+	const MODULE_VERSION = '1.10.2';
 
 	const VERSION_CONSTANT = 'EMMCP_DB_VERSION';
+
+	/**
+	 * Files an earlier package shipped and the current one no longer does,
+	 * relative to the module directory.
+	 *
+	 * Most customers upgrade by unzipping the new package over the old one,
+	 * which adds and replaces files but never removes any: these stay on disk,
+	 * under the web root, forever. None is loaded by the current code (the
+	 * runtime's classmap is authoritative), but an old class file defining a
+	 * shared DolibarrMcp\ class, or a dev config file answering an HTTP
+	 * request, is not something to leave lying around.
+	 *
+	 * Fixed list, never a pattern: only these exact paths are ever removed,
+	 * and the build refuses to package any of them (a file brought back by a
+	 * later release must be taken out of this list first).
+	 */
+	const OBSOLETE_FILES = array(
+		// Until 1.0.0 (OAuth server moved to dolibarr-mcp-oauth in 1.1.0)
+		'class/emmcpoauthserver.class.php',
+		// Until 1.2.0 (SQL access moved to the shared dolibarr-mcp-sql in 1.3.0)
+		'class/emmcpsqlaudit.class.php',
+		'class/emmcpsqlcapability.class.php',
+		'class/emmcpsqlgateway.class.php',
+		'class/emmcpsqlpermissions.class.php',
+		'vendor/dolibarr-mcp-server/src/Sql/GrantInspector.php',
+		// Dev files of dependencies, pruned from the package since 1.9.0 / 1.2.0
+		'vendor/dolibarr-mcp-server/vendor/greenlion/php-sql-parser/.buildpath',
+		'vendor/dolibarr-mcp-server/vendor/greenlion/php-sql-parser/.eclipse-PHP-formatter.xml',
+		'vendor/dolibarr-mcp-server/vendor/greenlion/php-sql-parser/.gitmodules',
+		'vendor/dolibarr-mcp-server/vendor/greenlion/php-sql-parser/.project',
+		'vendor/dolibarr-mcp-server/vendor/greenlion/php-sql-parser/.travis.yml',
+		'vendor/dolibarr-mcp-server/vendor/guzzlehttp/guzzle/package-lock.json',
+		'vendor/dolibarr-mcp-server/vendor/phpdocumentor/type-resolver/.phpdoc/template/base.html.twig',
+		'vendor/dolibarr-mcp-server/vendor/php-http/discovery/.php-cs-fixer.php',
+		'vendor/dolibarr-mcp-server/vendor/webmozart/assert/.php-cs-fixer.php',
+	);
 
 	/** @var DoliDB */
 	private $db;
@@ -132,6 +168,10 @@ class EmmcpMigrations
 		}
 
 		$ok = $this->registerPermissions() && $ok;
+
+		// Never affects $ok: a file the web server may not delete must not
+		// block the schema, nor the MCP endpoint behind it.
+		$this->removeObsoleteFiles();
 
 		if ($ok) {
 			$this->setStoredVersion(self::MODULE_VERSION);
@@ -393,6 +433,47 @@ class EmmcpMigrations
 			'emMCP database schema version (managed automatically)',
 			$entity
 		);
+	}
+
+	/**
+	 * Delete the files listed in OBSOLETE_FILES, if present.
+	 *
+	 * Strictly confined to the module directory: each path is resolved and must
+	 * sit under it, and only regular files are removed (never a directory). A
+	 * file that cannot be deleted (owner, read-only mount) is logged and left;
+	 * nothing here can fail the upgrade.
+	 *
+	 * @param  string|null $moduleDir Module directory (tests only); defaults to this module
+	 * @return string[]               Relative paths actually removed
+	 */
+	public function removeObsoleteFiles($moduleDir = null)
+	{
+		$removed = array();
+		$root = realpath($moduleDir !== null ? $moduleDir : dirname(__DIR__));
+		if ($root === false) {
+			return $removed;
+		}
+
+		foreach (self::OBSOLETE_FILES as $relative) {
+			$path = $root.'/'.$relative;
+			if (!is_file($path) || is_link($path)) {
+				continue;
+			}
+			$real = realpath($path);
+			if ($real === false || strpos($real, $root.DIRECTORY_SEPARATOR) !== 0) {
+				continue;
+			}
+			if (@unlink($real)) {
+				$removed[] = $relative;
+			} else {
+				dol_syslog('[EMMCP] Could not remove obsolete file '.$relative.' (permissions?); harmless, can be deleted by hand', LOG_WARNING);
+			}
+		}
+		if ($removed) {
+			dol_syslog('[EMMCP] Removed files left by an earlier version: '.implode(', ', $removed), LOG_INFO);
+		}
+
+		return $removed;
 	}
 
 	/**

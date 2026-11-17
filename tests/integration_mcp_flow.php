@@ -124,6 +124,20 @@ $auditSource = substr('t_'.bin2hex(random_bytes(5)), 0, 16);
 
 $grantedForTest = false;
 $rightId = 0;
+// The dev instance this runs on may legitimately hold the right and the opt-in
+// already (someone using SQL over MCP there). The run must neither fail on that
+// nor remove it: it records what it found and puts exactly that back.
+$initialRightGranted = false;
+$initialCounts = array('optins' => 0, 'rights' => 0);
+foreach (array(
+	'optins' => "SELECT COUNT(*) AS n FROM ".MAIN_DB_PREFIX."emmcp_sql_permissions WHERE sql_enabled = 1",
+	'rights' => "SELECT COUNT(*) AS n FROM ".MAIN_DB_PREFIX."user_rights ur"
+		." JOIN ".MAIN_DB_PREFIX."rights_def r ON r.id = ur.fk_id WHERE r.module = 'emmcp'",
+) as $key => $sql) {
+	$resql = $db->query($sql);
+	$obj = $resql ? $db->fetch_object($resql) : null;
+	$initialCounts[$key] = $obj ? (int) $obj->n : -1;
+}
 
 /**
  * Put the instance back exactly as it was found.
@@ -138,7 +152,7 @@ $rightId = 0;
 function emmcpFlowCleanup()
 {
 	global $db, $conf, $roUser, $initialFlag, $initialOptIn, $initialDbUser, $initialDbPass;
-	global $auditSource, $grantedForTest, $rightId, $createdDbUser;
+	global $auditSource, $grantedForTest, $rightId, $createdDbUser, $initialRightGranted;
 	global $initialDbUserSet, $initialDbPassSet, $initialOptInRowExisted, $initialFlagSet;
 
 	static $done = false;
@@ -184,6 +198,10 @@ function emmcpFlowCleanup()
 
 	if ($grantedForTest && !empty($rightId)) {
 		$db->query("DELETE FROM ".MAIN_DB_PREFIX."user_rights WHERE fk_user = 1 AND fk_id = ".((int) $rightId));
+		if ($initialRightGranted) {
+			// Held before the run: removed only to prove deny-by-default, put back.
+			$db->query("INSERT INTO ".MAIN_DB_PREFIX."user_rights (fk_user, fk_id, entity) VALUES (1, ".((int) $rightId).", ".((int) $conf->entity).")");
+		}
 	}
 
 	// Exactly this run's rows, identified by its unique source marker: a
@@ -331,13 +349,22 @@ $grantedForTest = false;
 if ($rightRow) {
 	$rightId = (int) $rightRow->id;
 	$resql = $db->query("SELECT fk_id FROM ".MAIN_DB_PREFIX."user_rights WHERE fk_user = 1 AND fk_id = ".$rightId);
-	$alreadyGranted = $resql && $db->num_rows($resql) > 0;
-	check('admin does NOT hold the right by default', !$alreadyGranted);
-
-	if (!$alreadyGranted) {
-		$db->query("INSERT INTO ".MAIN_DB_PREFIX."user_rights (fk_user, fk_id, entity) VALUES (1, ".$rightId.", ".((int) $conf->entity).")");
-		$grantedForTest = true;
+	$initialRightGranted = $resql && $db->num_rows($resql) > 0;
+	// From here on the cleanup owns the right: it restores the initial state.
+	$grantedForTest = true;
+	if ($initialRightGranted) {
+		// Granted explicitly on this instance: take it away for the time of the
+		// check, so what is asserted is still "being admin is not enough".
+		print "  info the right was already granted to user 1 here; revoked for the check, restored at the end\n";
+		$db->query("DELETE FROM ".MAIN_DB_PREFIX."user_rights WHERE fk_user = 1 AND fk_id = ".$rightId);
 	}
+	$probeUser = new User($db);
+	$probeUser->fetch(1);
+	$probeUser->getrights();
+	$heldWithoutGrant = method_exists($probeUser, 'hasRight') ? $probeUser->hasRight('emmcp', 'sqlquery', 'read') : !empty($probeUser->rights->emmcp->sqlquery->read);
+	check('admin does NOT hold the right without an explicit grant', !$heldWithoutGrant);
+
+	$db->query("INSERT INTO ".MAIN_DB_PREFIX."user_rights (fk_user, fk_id, entity) VALUES (1, ".$rightId.", ".((int) $conf->entity).")");
 
 	$testUser = new User($db);
 	$testUser->fetch(1);
@@ -436,8 +463,8 @@ $state = emmcpFlowInspectState();
 
 check('SQL access is disabled again', (int) $state['flag'] === (int) $initialFlag, (string) $state['flag']);
 check('flag constant restored to its initial presence', $state['flag_row_exists'] === $initialFlagSet, var_export($state['flag_row_exists'], true));
-check('no opt-in left behind', $state['optins'] === 0, (string) $state['optins']);
-check('temporary right revoked', $state['rights'] === 0, (string) $state['rights']);
+check('opt-ins as found', $state['optins'] === $initialCounts['optins'], $state['optins'].' vs '.$initialCounts['optins']);
+check('rights as found', $state['rights'] === $initialCounts['rights'], $state['rights'].' vs '.$initialCounts['rights']);
 check('test account removed', $state['dbusers'] === 0, (string) $state['dbusers']);
 check('audit rows created by this run were purged', $state['audit_after_marker'] === 0, (string) $state['audit_after_marker']);
 check('credential constants restored', $state['dbuser_const'] === $initialDbUser, $state['dbuser_const']);
