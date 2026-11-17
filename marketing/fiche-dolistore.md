@@ -11,7 +11,7 @@ longues sont dans `dolistore/description_<lang>.html`, prêtes à coller.
 |---|---|
 | **Nom du produit** | emMCP — Serveur MCP pour Dolibarr |
 | **Référence** | emmcp |
-| **Prix** | 15,00 € HT |
+| **Prix** | 30,00 € HT |
 | **Catégorie** | Interfaces avec systèmes externes (ou « Outils » selon l'arborescence du jour) |
 | **Éditeur** | E-dem |
 | **Licence** | GPL-3.0-or-later |

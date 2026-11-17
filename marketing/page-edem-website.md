@@ -6,7 +6,7 @@ Tout le contenu ci-dessous est rédigé pour être publié tel quel ou adapté.
 - **URL cible** : `https://www.e-dem.com/fr/produits/emmcp`
   (et `/en/`, `/de/`, `/es/`, `/it/` — le segment `produits` reste en français,
   comme pour Dalfred)
-- **Prix affiché** : 15 € HT, achat unique via le DoliStore
+- **Prix affiché** : 30 € HT, achat unique via le DoliStore
 - **Lien d'achat** : https://www.dolistore.com/product.php?id=3420
   (fiche validée et en ligne depuis le 29/09/2026)
 - **Module lié** : Dalfred — proposer un renvoi croisé entre les deux pages
