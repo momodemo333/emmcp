@@ -82,6 +82,10 @@ if (!file_exists($autoload)) {
 	die("MCP package autoloader not found\n");
 }
 require_once $autoload;
+// In a release package the runtime's dependencies are prefixed (EmmcpVendor\),
+// so third-party classes are named through the runtime helper, as mcp.php does.
+dol_include_once('/emmcp/lib/emmcp_runtime.php');
+$serverRequestClass = emmcp_runtime_class(dirname(dirname($autoload)), 'GuzzleHttp\Psr7\ServerRequest');
 
 dol_include_once('/emmcp/class/emmcpmigrations.class.php');
 dol_include_once('/emmcp/lib/emmcp_bootstrap.php');
@@ -257,6 +261,17 @@ $roPass = 'ro_'.bin2hex(random_bytes(8));
 $createdDbUser = '';
 
 register_shutdown_function('emmcpFlowCleanup');
+// The shutdown function alone is not enough: main.inc.php registered
+// dol_shutdown() first, and it closes the database connection before our
+// cleanup runs, whose queries then fail silently. An uncaught exception or
+// Error (the usual way this script dies) is handled here instead, while the
+// connection is still open. Seen 2026-11-17: a crashed run left the SQL flag
+// switched off, two constants and a MariaDB account behind.
+set_exception_handler(function ($e) {
+	print "  FAIL uncaught ".get_class($e).': '.$e->getMessage()."\n";
+	emmcpFlowCleanup();
+	exit(1);
+});
 // No IF NOT EXISTS: a name collision must fail the run rather than take over
 // an account this test did not create.
 $db->query("CREATE USER '".$db->escape($roUser)."'@'%' IDENTIFIED BY '".$db->escape($roPass)."'");
@@ -276,10 +291,11 @@ $conf->global->EMMCP_SQL_DB_PASSWORD = $roPass;
  */
 function listToolNames($capability)
 {
+	global $serverRequestClass;
 	$sessionDir = sys_get_temp_dir().'/emmcp-flow-'.uniqid();
 	$config = new \DolibarrMcp\Config\ConnectionConfig(DOL_MAIN_URL_ROOT, 'unused-for-discovery');
 
-	$init = new \GuzzleHttp\Psr7\ServerRequest('POST', 'https://example.org/mcp.php', array(
+	$init = new $serverRequestClass('POST', 'https://example.org/mcp.php', array(
 		'Content-Type' => 'application/json',
 		'Accept' => 'application/json, text/event-stream',
 	), json_encode(array(
@@ -294,7 +310,7 @@ function listToolNames($capability)
 	$response = \DolibarrMcp\Bootstrap::handleHttpRequest($init, $sessionDir, $config, $capability);
 	$sessionId = $response->getHeaderLine('Mcp-Session-Id');
 
-	$list = new \GuzzleHttp\Psr7\ServerRequest('POST', 'https://example.org/mcp.php', array(
+	$list = new $serverRequestClass('POST', 'https://example.org/mcp.php', array(
 		'Content-Type' => 'application/json',
 		'Accept' => 'application/json, text/event-stream',
 		'Mcp-Session-Id' => $sessionId,

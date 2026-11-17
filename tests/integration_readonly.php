@@ -288,9 +288,11 @@ try {
 }
 
 print "\n== Validator wired to the real prefix ==\n";
-$autoload = dol_buildpath('/dalfred/dolibarr-mcp-server/vendor/autoload.php', 0);
-if (file_exists($autoload)) {
-	require_once $autoload;
+// The runtime loaded at the top (emMCP's own first, as in mcp.php). Loading
+// Dalfred's here as well, as this test once did, is a fatal error whenever
+// both are installed: the two copies of the runtime share Composer's
+// autoloader class name.
+if (class_exists('\\DolibarrMcp\\Sql\\SqlReadOnlyValidator')) {
 	$policy = new \DolibarrMcp\Sql\SqlPolicy(MAIN_DB_PREFIX);
 	$validator = new \DolibarrMcp\Sql\SqlReadOnlyValidator($policy);
 
