@@ -67,7 +67,7 @@ print '<tr class="liste_titre"><td>'.$langs->trans('Parameter').'</td><td>'.$lan
 print '<tr class="oddeven"><td class="titlefield">'.$langs->trans('Version').'</td><td><strong>'.dol_escape_htmltag($module->version).'</strong></td></tr>';
 print '<tr class="oddeven"><td>'.$langs->trans('EmmcpEditor').'</td><td><a href="'.dol_escape_htmltag($module->editor_url).'" target="_blank" rel="noopener">'.dol_escape_htmltag($module->editor_name).'</a></td></tr>';
 print '<tr class="oddeven"><td>'.$langs->trans('License').'</td><td>GPL-3.0-or-later</td></tr>';
-print '<tr class="oddeven"><td>'.$langs->trans('EmmcpCompatibility').'</td><td>Dolibarr 16.x → 21.x · PHP 8.1+</td></tr>';
+print '<tr class="oddeven"><td>'.$langs->trans('EmmcpCompatibility').'</td><td>Dolibarr 17+ · PHP 8.1+</td></tr>';
 
 print '</table>';
 print '</div>';

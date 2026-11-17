@@ -70,7 +70,7 @@ class modEmmcp extends DolibarrModules
 		$this->conflictwith = array();
 		$this->langfiles = array('emmcp@emmcp');
 		$this->phpmin = array(8, 1);
-		$this->need_dolibarr_version = array(16, 0);
+		$this->need_dolibarr_version = array(17, 0);
 
 		// Constants
 		//

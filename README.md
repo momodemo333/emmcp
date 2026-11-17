@@ -10,7 +10,7 @@ dépendances, isolées (voir plus bas). Aucun autre module E-dem n'est requis.
 
 ## Prérequis
 
-- Dolibarr 16.0 ou plus récent ; PHP 8.1 ou plus récent.
+- Dolibarr 17.0 ou plus récent ; PHP 8.1 ou plus récent.
 - Module **API REST** de Dolibarr activé (les outils passent par lui).
 - Accès en **HTTPS** (obligatoire pour les connecteurs OAuth).
 - MySQL ou MariaDB pour l'option de requêtes SQL en lecture seule (les autres
