@@ -30,7 +30,11 @@
 use Luracast\Restler\RestException;
 
 require_once DOL_DOCUMENT_ROOT.'/projet/class/task.class.php';
-require_once DOL_DOCUMENT_ROOT.'/core/class/timespent.class.php';
+// TimeSpent exists from Dolibarr 18; on 17 the time-spent update endpoint refuses instead
+// of breaking every REST call (the API loads this file on each request).
+if (file_exists(DOL_DOCUMENT_ROOT.'/core/class/timespent.class.php')) {
+	require_once DOL_DOCUMENT_ROOT.'/core/class/timespent.class.php';
+}
 
 /**
  * emMCP REST API
@@ -163,6 +167,9 @@ class Emmcp extends DolibarrApi
 			throw new RestException(403, 'Access not allowed for login '.DolibarrApiAccess::$user->login);
 		}
 
+		if (!class_exists('TimeSpent')) {
+			throw new RestException(501, 'Updating a time spent line requires Dolibarr 18 or later');
+		}
 		$line = new TimeSpent($this->db);
 		$line->fetch($id);
 		if (!empty($line->invoice_id)) {

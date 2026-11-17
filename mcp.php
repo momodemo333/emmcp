@@ -324,7 +324,12 @@ if ($mcpUserId > 0) {
 	$tmpUser = new User($db);
 	if ($tmpUser->fetch($mcpUserId) > 0) {
 		$mcpLogin = (string) $tmpUser->login;
-		$tmpUser->loadRights();
+		// loadRights() only exists from Dolibarr 20; getrights() is the older name.
+		if (method_exists($tmpUser, 'loadRights')) {
+			$tmpUser->loadRights();
+		} else {
+			$tmpUser->getrights();
+		}
 		$mcpUser = $tmpUser;
 	}
 }
