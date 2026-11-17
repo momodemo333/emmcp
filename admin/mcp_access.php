@@ -1,5 +1,5 @@
 <?php
-/* Copyright (C) 2026 Morgan Demoulin <morgan@e-dem.com>
+/* Copyright (C) 2026 Morgan Demoulin <support@e-dem.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
