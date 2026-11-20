@@ -1,6 +1,6 @@
 # emMCP — Serveur MCP distant pour Dolibarr
 
-Version 1.10.2. Expose une instance Dolibarr comme **serveur MCP** (Model
+Version 1.11.0. Expose une instance Dolibarr comme **serveur MCP** (Model
 Context Protocol, transport Streamable HTTP) consommable par claude.ai,
 Claude Desktop, ChatGPT (connecteurs OAuth), Claude Code, l'API Anthropic
 (`mcp_servers`) et tout client MCP compatible HTTP.
@@ -155,6 +155,45 @@ bouton **Révoquer** ; supprimer la clé API REST de l'utilisateur ou désactive
 son compte met aussi fin à tous les accès OAuth qu'il a donnés, et seule la
 désactivation du compte l'empêche de se reconnecter.
 
+## Multicompany (depuis la 1.11.0)
+
+emMCP fonctionne avec le module Multicompany, y compris en mode transverse
+(utilisateurs créés dans l'entité maîtresse et partagés avec d'autres entités).
+Chaque connecteur IA travaille dans **une** entité : toutes ses lectures et
+écritures s'y font, avec les droits que l'utilisateur possède dans cette entité.
+
+1. Activer emMCP **dans chaque entité** qui doit être accessible à l'IA
+   (Configuration → Modules, depuis cette entité), ainsi que le module API REST.
+2. Dans Multicompany, donner à l'utilisateur l'accès à l'entité (groupe
+   d'utilisateurs de l'entité) avec les droits voulus. Pour lister les tiers,
+   prévoir aussi « Étendre l'accès à tous les tiers ».
+3. Depuis l'entité, onglet **Réglages** : copier l'**URL du connecteur pour
+   l'entité** (`https://<instance>/custom/emmcp/mcp.php?entity=N`) et créer le
+   connecteur avec cette URL — un connecteur par entité.
+4. À la connexion, l'écran d'autorisation affiche l'entité connectée. Avec
+   l'URL sans `?entity=`, l'utilisateur choisit l'entité dans une liste (celles
+   auxquelles il a accès et où emMCP est activé).
+
+Règles :
+
+- L'entité choisie est liée à l'accès accordé (jetons OAuth) ; une demande vers
+  une autre entité avec ce jeton est refusée (403).
+- Avec une clé API (Claude Code, `mcp.json`) : `mcp.php?entity=N`, sinon
+  l'entité principale de l'utilisateur.
+- Accès vérifié à chaque requête, avec la règle de Multicompany : superadmin
+  partout, sinon appartenance à un groupe de l'entité (mode transverse) ou à
+  l'entité elle-même ; entité active. Refus clair sinon, jamais de repli
+  silencieux sur une autre entité.
+- Les **accès accordés**, le **journal d'activité** et le **journal de
+  connexion** sont rangés par entité : chaque entité voit les siens (un
+  superadmin change d'entité pour voir ceux d'une autre). Les réglages
+  (limites, etc.) sont des constantes Dolibarr, donc propres à chaque entité.
+- L'onglet **Diagnostic** affiche une ligne Multicompany : mode, entité
+  courante, emMCP activé ou non dans cette entité, entités que l'utilisateur
+  courant peut connecter, URL du connecteur de l'entité.
+- L'accès SQL en lecture seule reste désactivé sous Multicompany : une requête
+  SQL lit les lignes de toutes les entités.
+
 ## ChatGPT (connecteur personnalisé, OAuth)
 
 Dans ChatGPT (mode développeur → créer un connecteur / une app, authentification
@@ -239,8 +278,8 @@ par une erreur JSON qui nomme le fichier fautif.
 ## Limites connues
 
 - Découverte des tools re-scannée à chaque requête (pas de cache PSR-16).
-- Pas de gestion multi-entité (multicompany). L'accès SQL en lecture seule est
-  d'ailleurs refusé hors entité 1 tant que l'exception n'est pas activée.
+- Multicompany : l'accès SQL en lecture seule reste refusé (voir la section
+  Multicompany) ; les clients OAuth enregistrés sont comptés dans l'entité 1.
 - Portée OAuth unique (`dolibarr`) : pas encore de granularité par scope.
 - Les requêtes SQL en lecture seule nécessitent MySQL ou MariaDB (PostgreSQL
   n'est pas pris en charge par cette fonctionnalité).

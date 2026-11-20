@@ -244,3 +244,25 @@ EmmcpDiagEvent_mcp_auth=Requête MCP refusée
 EmmcpDiagEvent_mcp_runtime=Erreur du moteur MCP
 EmmcpDiagReport=Rapport pour le support
 EmmcpDiagReportHelp=Copiez ce texte dans votre message au support.
+
+#
+# Multicompany (1.11.0)
+#
+EmmcpEndpointEntity=URL du connecteur pour l'entité « %s »
+EmmcpEndpointEntityHelp=Multicompany : cette URL connecte l'IA à l'entité où vous vous trouvez. Créez un connecteur par entité, chacun avec l'URL de son entité. L'URL sans « ?entity= » fonctionne aussi : l'entité se choisit alors sur l'écran d'autorisation.
+EmmcpConnectorMulticompanyHelp=Multicompany : l'URL ci-dessus vise l'entité courante. L'écran d'autorisation montre l'entité connectée ; toutes les lectures et écritures de l'IA se feront dans cette entité, avec les droits que l'utilisateur y possède.
+EmmcpOAuthConsentEntity=Entité (société) à connecter
+EmmcpOAuthConsentEntityHelp=L'IA lira et écrira uniquement dans cette entité, avec vos droits dans cette entité. Pour une autre entité, ajoutez un autre connecteur.
+EmmcpOAuthEntityRefused=Ce connecteur vise l'entité n° %s, mais le compte « %s » n'y a pas accès, ou emMCP n'est pas activé dans cette entité. Demandez à l'administrateur de vous donner accès à cette entité dans Multicompany (groupe d'utilisateurs de l'entité) et d'y activer emMCP.
+EmmcpOAuthNoEntity=Le compte « %s » n'a accès à aucune entité où le module emMCP est activé. Demandez à l'administrateur d'activer emMCP dans votre entité, ou de vous donner accès à une entité où il l'est.
+EmmcpDiagMulticompany=Multicompany
+EmmcpDiagMulticompanyOff=Non activé : tout se passe dans l'entité 1.
+EmmcpDiagMulticompanyOn=Activé (%s)
+EmmcpDiagMulticompanyTransverse=mode transverse : utilisateurs partagés entre entités
+EmmcpDiagMulticompanyNotTransverse=chaque utilisateur appartient à une seule entité
+EmmcpDiagMulticompanyCurrent=Entité courante : %s — emMCP activé ici : %s
+EmmcpDiagMulticompanyUserEntities=Entités que « %s » peut connecter (accès + emMCP activé) : %s
+EmmcpDiagMulticompanyUrl=URL du connecteur pour cette entité : %s
+EmmcpDiagMulticompanyHelp=Avec OAuth, l'entité est choisie sur l'écran d'autorisation et liée à l'accès accordé ; avec une clé API, ajoutez « ?entity=N » à l'URL (sinon : entité principale de l'utilisateur). Les accès accordés et le journal de chaque entité se consultent depuis cette entité. L'accès SQL reste désactivé sous Multicompany.
+EmmcpDiagMulticompanyDisabledHere=emMCP n'est pas activé dans cette entité : un connecteur vers elle sera refusé. Activez le module ici (Configuration → Modules) si cette entité doit être accessible à l'IA.
+EmmcpDiagEvent_mcp_entity=Entité refusée

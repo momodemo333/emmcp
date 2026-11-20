@@ -75,6 +75,14 @@ print '<tr class="liste_titre"><td>'.$langs->trans('Parameter').'</td><td>'.$lan
 print '<tr class="oddeven"><td class="titlefield">'.$langs->trans('EmmcpEndpoint').'</td>';
 print '<td><strong>'.showValueWithClipboardCPButton($mcpEndpoint, 1, $mcpEndpoint).'</strong></td></tr>';
 
+// Multicompany: the connector URL of the entity the administrator is in.
+dol_include_once('/emmcp/lib/emmcp_entity.lib.php');
+$entityEndpoint = '';
+if (emmcpMulticompanyActive($db)) {
+	$entityEndpoint = $mcpEndpoint.'?entity='.((int) $conf->entity);
+	print '<tr class="oddeven"><td>'.$langs->transnoentities('EmmcpEndpointEntity', dol_escape_htmltag(emmcpEntityLabel($db, (int) $conf->entity))).'</td>';
+	print '<td><strong>'.showValueWithClipboardCPButton($entityEndpoint, 1, $entityEndpoint).'</strong><br><span class="opacitymedium small">'.$langs->trans('EmmcpEndpointEntityHelp').'</span></td></tr>';
+}
 print '<tr class="oddeven"><td>'.$langs->trans('EmmcpTransport').'</td>';
 print '<td>Streamable HTTP (MCP) — POST JSON-RPC 2.0</td></tr>';
 
@@ -102,11 +110,14 @@ print load_fiche_titre($langs->trans('EmmcpClientExamples'), '', '');
 print '<div class="emmcp-step">';
 print '<h3>'.img_picto('', 'fa-plug', 'class="pictofixedwidth"').$langs->trans('EmmcpClientClaudeAi').' <span class="badge badge-status4 badge-status">'.$langs->trans('EmmcpRecommended').'</span></h3>';
 print '<div class="opacitymedium">'.$langs->trans('EmmcpConnectorOAuthHelp').'</div>';
-print emmcpCodeBlock($mcpEndpoint, $langs->trans('EmmcpConnectorUrlLabel'));
+print emmcpCodeBlock($entityEndpoint !== '' ? $entityEndpoint : $mcpEndpoint, $langs->trans('EmmcpConnectorUrlLabel'));
+if ($entityEndpoint !== '') {
+	print '<div class="opacitymedium">'.$langs->trans('EmmcpConnectorMulticompanyHelp').'</div>';
+}
 print '</div>';
 
 // --- Option 2: Claude Code (API key) ---
-$claudeCodeCmd = 'claude mcp add dolibarr --transport http '.$mcpEndpoint.' --header "Authorization: Bearer '.$langs->trans('EmmcpYourApiKey').'"';
+$claudeCodeCmd = 'claude mcp add dolibarr --transport http '.($entityEndpoint !== '' ? $entityEndpoint : $mcpEndpoint).' --header "Authorization: Bearer '.$langs->trans('EmmcpYourApiKey').'"';
 print '<div class="emmcp-step">';
 print '<h3>'.img_picto('', 'fa-terminal', 'class="pictofixedwidth"').$langs->trans('EmmcpClientClaudeCode').'</h3>';
 print '<div class="opacitymedium">'.$langs->trans('EmmcpAuthNote').'</div>';
@@ -118,7 +129,7 @@ $mcpJson = json_encode(array(
 	'mcpServers' => array(
 		'dolibarr' => array(
 			'type' => 'http',
-			'url' => $mcpEndpoint,
+			'url' => $entityEndpoint !== '' ? $entityEndpoint : $mcpEndpoint,
 			'headers' => array('Authorization' => 'Bearer '.$langs->trans('EmmcpYourApiKey')),
 		),
 	),

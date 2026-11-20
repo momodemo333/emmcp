@@ -58,7 +58,7 @@ CRITICAL_FILES := mcp.php oauth.php .htaccess \
 	vendor/dolibarr-mcp-oauth/src/HttpEndpoint.php \
 	vendor/dolibarr-mcp-oauth/src/OAuthRouter.php \
 	vendor/dolibarr-mcp-server/vendor/emmcp-scope-prefix.txt \
-	admin/diagnostic.php class/emmcpauthlog.class.php lib/emmcp_runtime.php \
+	admin/diagnostic.php class/emmcpauthlog.class.php lib/emmcp_runtime.php lib/emmcp_entity.lib.php \
 	sql/llx_emmcp_auth_log.sql sql/llx_emmcp_auth_log.key.sql
 
 # Colors
@@ -103,7 +103,7 @@ lint:
 # bundle. The build refuses to package anything else: the package is a separate
 # repository, so without this the ZIP silently carries whatever happens to be
 # checked out — a work-in-progress branch, or a stale tree.
-EXPECTED_RUNTIME_VERSION ?= 2.7.0
+EXPECTED_RUNTIME_VERSION ?= 2.8.0
 
 # Same for the shared OAuth library: it is a third separate repository, and the
 # build would otherwise bundle whatever is checked out beside it.

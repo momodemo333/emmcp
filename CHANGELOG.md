@@ -1,5 +1,50 @@
 # Changelog
 
+## [1.11.0] - 2026-11-20
+
+### Added
+- **Multicompany: an AI client can work in any entity the user has access
+  to.** Until now `mcp.php` always ran in entity 1 and the tools worked in the
+  main entity of the user: a user shared between entities (transverse mode,
+  created in the master entity) could not connect Claude or ChatGPT to the
+  entity they actually work in, and a module enabled only in another entity
+  answered "Module emMCP not enabled".
+  - The OAuth consent screen shows the entity being connected; with the plain
+    connector URL the user picks it among the entities they have access to and
+    where emMCP is enabled. The entity is stored on the authorization code and
+    inherited by the access and refresh tokens.
+  - Connector URL per entity: `mcp.php?entity=N`, shown in **Settings** and
+    **Diagnostic** for the current entity. It fixes the entity on the consent
+    screen, and selects the entity for API key clients (default: the user's
+    main entity).
+  - Every request checks the user's access to the entity (rule of
+    Multicompany: superadmin everywhere, otherwise a user group of the entity
+    in transverse mode or the entity itself; the entity must be active), and
+    that emMCP is enabled there. Refusals are explicit (403 with the reason,
+    logged in the connection log of the entity concerned); a token granted for
+    one entity is refused for another.
+  - The REST calls of the tools carry the native `DOLAPIENTITY` header
+    (dolibarr-mcp-server 2.8.0), so every read and write happens in that
+    entity with the user's rights there.
+  - Granted accesses, activity log and connection log are per entity, as their
+    tables already were: each entity sees its own. Revoking from the
+    **Granted accesses** tab only acts on an access listed in the current
+    entity.
+  - Diagnostic: a Multicompany line (mode, current entity, emMCP enabled
+    there, entities the current user can connect, connector URL).
+- Without Multicompany nothing changes: everything stays in entity 1 and no
+  entity header is sent.
+
+### Security
+- Read-only SQL stays refused under Multicompany, now also checked install-wide
+  by emMCP: once a request works in another entity, Multicompany's own flag may
+  be absent from that entity's configuration.
+
+### Notes
+- Embeds dolibarr-mcp-server 2.8.0. No database change (schema version
+  1.11.0, nothing to migrate): the token, log and access tables already had an
+  entity column.
+
 ## [1.10.2] - 2026-11-17
 
 ### Fixed

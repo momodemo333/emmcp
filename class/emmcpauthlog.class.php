@@ -45,9 +45,10 @@ class EmmcpAuthLog
 	 * @param string|null $reason   Precise reason (failure) or detail (success)
 	 * @param string|null $clientId OAuth client_id, when known
 	 * @param int|null    $userId   Dolibarr user, when known
+	 * @param int|null    $entity   Entity concerned, when not the one of the request
 	 * @return void
 	 */
-	public static function record($db, $event, $success, $reason = null, $clientId = null, $userId = null)
+	public static function record($db, $event, $success, $reason = null, $clientId = null, $userId = null, $entity = null)
 	{
 		global $conf;
 
@@ -58,7 +59,10 @@ class EmmcpAuthLog
 
 			$ip = function_exists('getUserRemoteIP') ? (string) getUserRemoteIP() : (string) ($_SERVER['REMOTE_ADDR'] ?? '');
 			$ua = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
-			$entity = isset($conf->entity) ? (int) $conf->entity : 1;
+			// The entity concerned: the one of the request, unless the caller
+			// names another (Multicompany refusal for an entity the request
+			// never switched to, so that entity's administrator sees it).
+			$entity = $entity !== null && (int) $entity > 0 ? (int) $entity : (isset($conf->entity) ? (int) $conf->entity : 1);
 
 			if ($event === 'mcp_auth' && !$success && $userId === null && self::recentAnonymous($db, $ip) >= self::ANONYMOUS_PER_MINUTE) {
 				return;

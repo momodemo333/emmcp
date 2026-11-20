@@ -244,3 +244,25 @@ EmmcpDiagEvent_mcp_auth=MCP request refused
 EmmcpDiagEvent_mcp_runtime=MCP runtime error
 EmmcpDiagReport=Report for support
 EmmcpDiagReportHelp=Copy this text into your message to support.
+
+#
+# Multicompany (1.11.0)
+#
+EmmcpEndpointEntity=Connector URL for entity "%s"
+EmmcpEndpointEntityHelp=Multicompany: this URL connects the AI to the entity you are in. Create one connector per entity, each with the URL of its entity. The URL without "?entity=" also works: the entity is then chosen on the authorization screen.
+EmmcpConnectorMulticompanyHelp=Multicompany: the URL above targets the current entity. The authorization screen shows the connected entity; every read and write of the AI happens in that entity, with the rights the user holds there.
+EmmcpOAuthConsentEntity=Entity (company) to connect
+EmmcpOAuthConsentEntityHelp=The AI will read and write only in this entity, with your rights in this entity. For another entity, add another connector.
+EmmcpOAuthEntityRefused=This connector targets entity #%s, but the account "%s" has no access to it, or emMCP is not enabled in that entity. Ask the administrator to give you access to this entity in Multicompany (a user group of the entity) and to enable emMCP there.
+EmmcpOAuthNoEntity=The account "%s" has no access to any entity where the emMCP module is enabled. Ask the administrator to enable emMCP in your entity, or to give you access to an entity where it is.
+EmmcpDiagMulticompany=Multicompany
+EmmcpDiagMulticompanyOff=Not enabled: everything happens in entity 1.
+EmmcpDiagMulticompanyOn=Enabled (%s)
+EmmcpDiagMulticompanyTransverse=transverse mode: users shared between entities
+EmmcpDiagMulticompanyNotTransverse=each user belongs to a single entity
+EmmcpDiagMulticompanyCurrent=Current entity: %s — emMCP enabled here: %s
+EmmcpDiagMulticompanyUserEntities=Entities "%s" can connect (access + emMCP enabled): %s
+EmmcpDiagMulticompanyUrl=Connector URL for this entity: %s
+EmmcpDiagMulticompanyHelp=With OAuth, the entity is chosen on the authorization screen and bound to the granted access; with an API key, add "?entity=N" to the URL (otherwise: the user's main entity). The granted accesses and the log of each entity are read from that entity. SQL access stays disabled under Multicompany.
+EmmcpDiagMulticompanyDisabledHere=emMCP is not enabled in this entity: a connector to it will be refused. Enable the module here (Setup → Modules) if this entity must be reachable by the AI.
+EmmcpDiagEvent_mcp_entity=Entity refused

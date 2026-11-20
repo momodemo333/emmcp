@@ -98,8 +98,16 @@ if (emmcp_mcp_oauth_autoload() === null) {
 	die('{"error":"server_error","error_description":"dolibarr-mcp-oauth library not found"}');
 }
 
-if (!isModEnabled('emmcp')) {
+dol_include_once('/emmcp/lib/emmcp_entity.lib.php');
+$emmcpMulticompany = emmcpMulticompanyActive($db);
+if (!$emmcpMulticompany && !isModEnabled('emmcp')) {
 	emmcp_oauth_json(array('error' => 'server_error', 'error_description' => 'Module emMCP not enabled'), 503);
+}
+// Multicompany: OAuth requests carry no session (or the session of the
+// entity the user logged into), the module only has to be enabled in one
+// entity; the entity of the access is chosen at consent.
+if ($emmcpMulticompany && !emmcpModuleEnabledSomewhere($db)) {
+	emmcp_oauth_json(array('error' => 'server_error', 'error_description' => 'Module emMCP not enabled in any entity'), 503);
 }
 
 dol_include_once('/emmcp/class/emmcpauthlog.class.php');
@@ -111,6 +119,11 @@ EmmcpMigrations::runIfNeeded($db);
 
 $issuer = emmcpPublicUrl('/emmcp/oauth.php');
 $mcpUrl = emmcpPublicUrl('/emmcp/mcp.php');
+// Metadata asked for the connector URL of one entity (mcp.php?entity=N):
+// name that same URL as the protected resource.
+if ($emmcpMulticompany && emmcpRequestedEntity() > 0) {
+	$mcpUrl .= '?entity='.emmcpRequestedEntity();
+}
 $config = new \DolibarrMcpOAuth\ExposureConfig('emmcp', 'emcp_', 'EMMCP');
 $oauthServer = new \DolibarrMcpOAuth\OAuthServer($db, $config);
 $oauthRouter = new \DolibarrMcpOAuth\OAuthRouter($oauthServer, $config, $issuer, $mcpUrl);
@@ -190,6 +203,17 @@ switch ($emmcp_route) {
 			emmcp_oauth_json(array('error' => 'invalid_request', 'error_description' => 'POST required'), 405);
 		}
 		$getPost = fn(string $name, $default) => GETPOST($name, 'alphanohtml') ?: $default;
+		if ($emmcpMulticompany) {
+			// The tokens issued here inherit the entity of the code or refresh
+			// token they come from (the one chosen at consent).
+			$grantEntity = 0;
+			if (GETPOST('grant_type', 'alphanohtml') === 'authorization_code') {
+				$grantEntity = emmcpTokenEntity($db, 'code', (string) GETPOST('code', 'alphanohtml'));
+			} elseif (GETPOST('grant_type', 'alphanohtml') === 'refresh_token') {
+				$grantEntity = emmcpTokenEntity($db, 'refresh', (string) GETPOST('refresh_token', 'alphanohtml'));
+			}
+			emmcpSwitchEntity($db, $grantEntity);
+		}
 		$r = $oauthRouter->handleToken($getPost, $_SERVER);
 		$tokenClientId = (string) GETPOST('client_id', 'alphanohtml');
 		$grantType = (string) GETPOST('grant_type', 'alphanohtml');
@@ -262,8 +286,50 @@ switch ($emmcp_route) {
 
 		$action = GETPOST('action', 'aZ09');
 
+		// Multicompany: the entities this user may connect (access to the
+		// entity + emMCP enabled there). A connector URL of one entity
+		// (mcp.php?entity=N, passed back as "resource") fixes the choice.
+		$langs->load('emmcp@emmcp');
+		$consentEntities = array();
+		$lockedEntity = 0;
+		$defaultEntity = 0;
+		if ($emmcpMulticompany) {
+			$consentEntities = emmcpUserMcpEntities($db, (int) $user->id);
+			$lockedEntity = emmcpRequestedEntity((string) $resource);
+			$entityRefusal = '';
+			if ($lockedEntity > 0 && !isset($consentEntities[$lockedEntity])) {
+				$entityRefusal = $langs->transnoentities('EmmcpOAuthEntityRefused', (int) $lockedEntity, dol_escape_htmltag($user->login));
+			} elseif (empty($consentEntities)) {
+				$entityRefusal = $langs->transnoentities('EmmcpOAuthNoEntity', dol_escape_htmltag($user->login));
+			}
+			if ($entityRefusal !== '') {
+				EmmcpAuthLog::record($db, 'consent', false, 'No usable entity for this user'.($lockedEntity > 0 ? ' (connector of entity '.$lockedEntity.')' : ''), $client->client_id, (int) $user->id, $lockedEntity > 0 ? $lockedEntity : null);
+				llxHeader('', $langs->trans('EmmcpOAuthConsentTitle'));
+				print '<div class="error" style="max-width: 640px; margin: 60px auto;">'.$entityRefusal.'</div>';
+				llxFooter();
+				exit;
+			}
+			if ($lockedEntity > 0) {
+				$defaultEntity = $lockedEntity;
+			} elseif (isset($consentEntities[(int) $conf->entity])) {
+				$defaultEntity = (int) $conf->entity;
+			} else {
+				$defaultEntity = (int) array_key_first($consentEntities);
+			}
+		}
+
 		if ($action === 'consent' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 			// CSRF is enforced by main.inc.php (token checked on POST)
+			if ($emmcpMulticompany && GETPOST('decision', 'aZ09') === 'accept') {
+				$chosenEntity = $lockedEntity > 0 ? $lockedEntity : GETPOSTINT('emmcp_entity');
+				if (!isset($consentEntities[$chosenEntity])) {
+					EmmcpAuthLog::record($db, 'consent', false, 'Entity '.$chosenEntity.' refused: no access or emMCP not enabled there', $client->client_id, (int) $user->id);
+					header('Location: '.\DolibarrMcpOAuth\Support\UrlHelper::buildRedirect($redirectUri, array('error' => 'access_denied', 'error_description' => 'No access to the chosen entity', 'state' => $state, 'iss' => $oauthRouter->issuer())), true, 302);
+					exit;
+				}
+				// The code (then the tokens) are stored in the chosen entity.
+				emmcpSwitchEntity($db, $chosenEntity);
+			}
 			if (GETPOST('decision', 'aZ09') === 'accept') {
 				// The REST API key the MCP tools act through is created here,
 				// at the moment the user grants access, and never again on the
@@ -277,7 +343,7 @@ switch ($emmcp_route) {
 					exit;
 				}
 				dol_syslog('[EMMCP] OAuth consent granted by user '.$user->login.' to client '.$client->client_id, LOG_INFO);
-				EmmcpAuthLog::record($db, 'consent', true, 'Access granted by the user', $client->client_id, (int) $user->id);
+				EmmcpAuthLog::record($db, 'consent', true, 'Access granted by the user'.($emmcpMulticompany ? ' for entity '.((int) $conf->entity) : ''), $client->client_id, (int) $user->id);
 				header('Location: '.\DolibarrMcpOAuth\Support\UrlHelper::buildRedirect($redirectUri, array('code' => $code, 'state' => $state, 'iss' => $oauthRouter->issuer())), true, 302);
 				exit;
 			}
@@ -288,7 +354,6 @@ switch ($emmcp_route) {
 		}
 
 		// Consent screen
-		$langs->load('emmcp@emmcp');
 		llxHeader('', $langs->trans('EmmcpOAuthConsentTitle'));
 
 		$clientLabel = !empty($client->client_name) ? $client->client_name : $client->client_id;
@@ -312,6 +377,9 @@ switch ($emmcp_route) {
 .emmcp-consent h1 .fa-lock { color: #2b7ab5 !important; margin-right: 9px; }
 .emmcp-consent .emmcp-intro { margin: 0 0 6px; line-height: 1.55; }
 .emmcp-consent ul { margin: 18px 0 26px; padding-left: 22px; line-height: 1.6; }
+.emmcp-consent .emmcp-entity { margin: 0 0 22px; padding: 12px 14px; background: #f6f9fc; border: 1px solid #dbe6f0; border-radius: 6px; }
+.emmcp-consent .emmcp-entity select { margin: 6px 0 4px; }
+.emmcp-consent .emmcp-entity .emmcp-entity-name { display: inline-block; margin: 6px 0 4px; font-size: 1.05em; }
 .emmcp-consent .emmcp-actions { text-align: center; margin-top: 4px; }
 .emmcp-consent .emmcp-actions button { margin: 0 6px; padding: 10px 26px; font-size: 1em; font-weight: 600;
 	border-radius: 5px; cursor: pointer; background-image: none; text-shadow: none; }
@@ -332,6 +400,22 @@ switch ($emmcp_route) {
 		print '</ul>';
 
 		print '<form method="POST" action="'.dol_escape_htmltag($issuer.'/authorize').'">';
+		if ($emmcpMulticompany) {
+			print '<div class="emmcp-entity">';
+			print '<label for="emmcp_entity"><strong>'.$langs->trans('EmmcpOAuthConsentEntity').'</strong></label><br>';
+			if ($lockedEntity > 0 || count($consentEntities) === 1) {
+				print '<span class="emmcp-entity-name">'.dol_escape_htmltag($consentEntities[$defaultEntity]['label']).' <span class="opacitymedium">(#'.$defaultEntity.')</span></span>';
+				print '<input type="hidden" name="emmcp_entity" value="'.$defaultEntity.'">';
+			} else {
+				print '<select id="emmcp_entity" name="emmcp_entity" class="minwidth300">';
+				foreach ($consentEntities as $id => $entityRow) {
+					print '<option value="'.((int) $id).'"'.($id === $defaultEntity ? ' selected' : '').'>'.dol_escape_htmltag($entityRow['label']).' (#'.((int) $id).')</option>';
+				}
+				print '</select>';
+			}
+			print '<div class="opacitymedium small">'.$langs->trans('EmmcpOAuthConsentEntityHelp').'</div>';
+			print '</div>';
+		}
 		print '<input type="hidden" name="token" value="'.newToken().'">';
 		print '<input type="hidden" name="action" value="consent">';
 		foreach ($params as $k => $v) {

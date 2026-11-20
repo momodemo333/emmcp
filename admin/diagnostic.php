@@ -147,6 +147,31 @@ $checks[] = array(
 );
 $checks[] = array('label' => $langs->trans('EmmcpDiagIssuer'), 'status' => 'info', 'value' => $issuer, 'help' => '');
 
+// Multicompany: which entity an AI client connected from here works in, and
+// which entities the current user could connect.
+dol_include_once('/emmcp/lib/emmcp_entity.lib.php');
+if (!emmcpMulticompanyActive($db)) {
+	$checks[] = array('label' => $langs->trans('EmmcpDiagMulticompany'), 'status' => 'info', 'value' => $langs->trans('EmmcpDiagMulticompanyOff'), 'help' => '');
+} else {
+	$mcCurrent = (int) $conf->entity;
+	$mcEnabledHere = emmcpModuleEnabledInEntity($db, $mcCurrent);
+	$mcLabels = array();
+	foreach (emmcpUserMcpEntities($db, (int) $user->id) as $mcId => $mcRow) {
+		$mcLabels[] = dol_escape_htmltag($mcRow['label']).' (#'.((int) $mcId).')';
+	}
+	$mcValue = $langs->transnoentities('EmmcpDiagMulticompanyOn', dol_escape_htmltag(emmcpMulticompanyTransverse($db) ? $langs->transnoentities('EmmcpDiagMulticompanyTransverse') : $langs->transnoentities('EmmcpDiagMulticompanyNotTransverse')));
+	$mcValue .= '<br>'.$langs->transnoentities('EmmcpDiagMulticompanyCurrent', dol_escape_htmltag(emmcpEntityLabel($db, $mcCurrent)).' (#'.$mcCurrent.')', $mcEnabledHere ? $langs->transnoentities('Yes') : $langs->transnoentities('No'));
+	$mcValue .= '<br>'.$langs->transnoentities('EmmcpDiagMulticompanyUserEntities', dol_escape_htmltag($user->login), empty($mcLabels) ? $langs->transnoentities('None') : implode(', ', $mcLabels));
+	$mcValue .= '<br>'.$langs->transnoentities('EmmcpDiagMulticompanyUrl', dol_escape_htmltag($mcpUrl.'?entity='.$mcCurrent));
+	$checks[] = array(
+		'label' => $langs->trans('EmmcpDiagMulticompany'),
+		'status' => $mcEnabledHere ? 'ok' : 'warning',
+		'value' => $mcValue,
+		'help' => $mcEnabledHere ? $langs->trans('EmmcpDiagMulticompanyHelp') : $langs->trans('EmmcpDiagMulticompanyDisabledHere'),
+		'html' => true,
+	);
+}
+
 $grantProblems = array();
 $nbGrants = 0;
 $nbClients = 0;

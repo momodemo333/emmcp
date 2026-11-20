@@ -95,6 +95,12 @@ function emmcp_error($httpCode, $rpcCode, $message)
 		dol_include_once('/emmcp/lib/emmcp_bootstrap.php');
 		emmcp_mcp_oauth_autoload();
 		$prm = emmcpPublicUrl('/emmcp/oauth.php').'/.well-known/oauth-protected-resource';
+		// Connector URL of one entity (mcp.php?entity=N): its metadata names
+		// that same URL as the protected resource.
+		dol_include_once('/emmcp/lib/emmcp_entity.lib.php');
+		if (emmcpRequestedEntity() > 0) {
+			$prm .= '?entity='.emmcpRequestedEntity();
+		}
 		$endpoint = new \DolibarrMcpOAuth\HttpEndpoint($GLOBALS['db'], new \DolibarrMcpOAuth\ExposureConfig('emmcp', 'emcp_', 'EMMCP'));
 		header('WWW-Authenticate: '.$endpoint->wwwAuthenticateHeader($prm));
 	}
@@ -133,6 +139,17 @@ function emmcpBuildSqlCapability($db, $conf, $apiKey)
 	}
 
 	$config = emmcp_sql_config();
+
+	// Raw SQL reads every entity's rows. The library refuses it under
+	// Multicompany through isModEnabled('multicompany'), which reads the
+	// configuration of the current entity: once mcp.php has switched to the
+	// entity of the access, that flag may be missing there. Same rule, read
+	// install-wide.
+	dol_include_once('/emmcp/lib/emmcp_entity.lib.php');
+	if (emmcpMulticompanyActive($db) && getDolGlobalInt($config->const('ALLOW_MULTIENTITY')) !== 1) {
+		return null;
+	}
+
 	$permissions = new \DolibarrMcpSql\SqlPermissions($db, $conf, $config);
 
 	// Cheapest gate first: skip loading a User object on the overwhelmingly
@@ -188,8 +205,17 @@ function emmcpResolveUserIdFromApiKey($db, $apiKey)
 	return $obj ? (int) $obj->rowid : 0;
 }
 
-if (!isModEnabled('emmcp')) {
+dol_include_once('/emmcp/lib/emmcp_entity.lib.php');
+$emmcpMulticompany = emmcpMulticompanyActive($db);
+
+// Without Multicompany: entity 1, as always. With it, the request starts in
+// entity 1 but works in the entity of its access (resolved after
+// authentication), so only require the module somewhere for now.
+if (!$emmcpMulticompany && !isModEnabled('emmcp')) {
 	emmcp_error(403, -32000, 'Module emMCP not enabled');
+}
+if ($emmcpMulticompany && !emmcpModuleEnabledSomewhere($db)) {
+	emmcp_error(403, -32000, 'Module emMCP not enabled in any entity');
 }
 
 // Dolibarr does not replay init() when a customer only uploads new files, and
@@ -246,6 +272,36 @@ if ($auth->apiKey === null) {
 }
 $apiKey = $auth->apiKey;
 
+// Multicompany: the entity this access works in. An OAuth token carries the
+// entity chosen at consent; an API key uses ?entity=N or the user's main
+// entity. The user's access to that entity is checked before anything runs.
+$mcpEntity = null;
+if ($emmcpMulticompany) {
+	$entityUserId = emmcpResolveUserIdFromApiKey($db, $apiKey);
+	$requestedEntity = emmcpRequestedEntity();
+	$bearer = emmcpPresentedBearer($_SERVER);
+	$tokenEntity = str_starts_with($bearer, 'emcp_a') ? emmcpTokenEntity($db, 'access', $bearer) : 0;
+	if ($tokenEntity > 0) {
+		if ($requestedEntity > 0 && $requestedEntity !== $tokenEntity) {
+			EmmcpAuthLog::record($db, 'mcp_entity', false, 'This access was granted for entity '.$tokenEntity.', the URL asks for entity '.$requestedEntity, null, $entityUserId, $requestedEntity);
+			emmcp_error(403, -32001, 'This access was granted for entity '.$tokenEntity.', not '.$requestedEntity.'. Use the connector URL of entity '.$tokenEntity.', or connect again choosing entity '.$requestedEntity.'.');
+		}
+		$mcpEntity = $tokenEntity;
+	} else {
+		$mcpEntity = $requestedEntity > 0 ? $requestedEntity : emmcpUserMainEntity($db, $entityUserId);
+	}
+	if (!emmcpUserCanUseEntity($db, $entityUserId, $mcpEntity)) {
+		EmmcpAuthLog::record($db, 'mcp_entity', false, 'User has no access to entity '.$mcpEntity.' (Multicompany), or the entity is disabled', null, $entityUserId, $mcpEntity);
+		emmcp_error(403, -32001, 'Access refused: this Dolibarr user has no access to entity '.$mcpEntity.' (Multicompany), or that entity is disabled.');
+	}
+	if (!emmcpModuleEnabledInEntity($db, $mcpEntity)) {
+		EmmcpAuthLog::record($db, 'mcp_entity', false, 'Module emMCP not enabled in entity '.$mcpEntity, null, $entityUserId, $mcpEntity);
+		emmcp_error(403, -32000, 'Module emMCP not enabled in entity '.$mcpEntity.'.');
+	}
+	emmcpSwitchEntity($db, $mcpEntity);
+	dol_syslog('[EMMCP] MCP request works in entity '.$mcpEntity.' (user '.$entityUserId.')', LOG_DEBUG);
+}
+
 // --- Load the Dolibarr MCP server package ----------------------------------
 
 // POC: reuse the MCP server embedded in the Dalfred module. A standalone
@@ -282,7 +338,13 @@ if (!empty($conflicts)) {
 // The MCP tools act through the local Dolibarr REST API with the caller's key.
 // The config is request-scoped (no putenv: FPM workers are reused across
 // requests and users, process-global state must not carry credentials).
-$config = new DolibarrMcp\Config\ConnectionConfig(DOL_MAIN_URL_ROOT, $apiKey);
+if ($mcpEntity !== null && !property_exists('DolibarrMcp\Config\ConnectionConfig', 'entity')) {
+	// An engine older than 2.8.0 would silently ignore the entity and work in
+	// the user's main entity: refuse rather than act in the wrong company.
+	emmcp_runtime_disarm();
+	emmcp_error(500, -32002, 'The embedded MCP server package is too old for Multicompany (2.8.0 or later required).');
+}
+$config = new DolibarrMcp\Config\ConnectionConfig(DOL_MAIN_URL_ROOT, $apiKey, 30, $mcpEntity);
 
 // Persist MCP sessions between PHP-FPM requests
 $sessionDir = DOL_DATA_ROOT.'/emmcp/sessions';

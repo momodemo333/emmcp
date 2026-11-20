@@ -57,7 +57,16 @@ if (emmcp_mcp_oauth_autoload() !== null) {
 if ($action == 'revoke' && $oauthServer !== null) {
 	$clientRowid = GETPOSTINT('client');
 	$userId = GETPOSTINT('userid');
-	$nb = $oauthServer->revokeGrant($clientRowid, $userId);
+	// Only an access listed here, i.e. granted in the current entity
+	// (Multicompany): an entity administrator cannot revoke another entity's.
+	$listed = false;
+	foreach ($oauthServer->listGrants() as $g) {
+		if ((int) $g->fk_client === $clientRowid && (int) $g->fk_user === $userId) {
+			$listed = true;
+			break;
+		}
+	}
+	$nb = $listed ? $oauthServer->revokeGrant($clientRowid, $userId) : 0;
 	if ($nb < 0) {
 		setEventMessages($oauthServer->error, null, 'errors');
 	} else {
