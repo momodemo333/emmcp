@@ -3,25 +3,39 @@
 ## [1.12.0] - 2026-11-20
 
 ### Added
-- **New tool `empayment_import_statement`: give the AI a card or bank
-  statement (PDF, CSV, photo) and it creates the movements in EMPayment**, to
-  reconcile in EMPayment's CODA screens. Offered only when EMPayment 2.7.0 or
-  later is enabled in the entity of the connection and the user may review a
-  statement (EMPayment "View CODA transactions" and Banks "Read"); importing
-  also needs EMPayment "Import CODA files" and Banks "Create/modify".
-  - Two calls, as every EMPayment action: a review that writes nothing
-    (new lines, duplicates, probable duplicates, balance check, warnings,
-    fingerprint), then the import with `confirm=true` and that fingerprint.
-  - The tool tells the AI to show the review to the user before confirming,
-    never to guess the bank account, to sign amounts from the account's point
-    of view (card purchase negative), to copy the transaction number whenever
-    the statement prints one, to give the opening and closing balances, and
-    never to alter a line to get round a reported duplicate (sending the same
-    statement again creates nothing).
-  - Every refusal comes back whole, with what to do next: all faulty lines of
-    a refused statement (EMPayment lists them all), balance mismatch, unknown
-    account, stale review (409: review again), and never a second import call
-    after a 503 or a lost answer.
+- **Two new tools to give the AI a card or bank statement (PDF, CSV, photo)
+  and have it create the movements in EMPayment**, to reconcile in EMPayment's
+  CODA screens. Offered only when EMPayment 2.7.0 or later is enabled in the
+  entity of the connection and the user may review a statement (EMPayment
+  "View CODA transactions" and Banks "Read"); importing also needs EMPayment
+  "Import CODA files" and Banks "Create/modify".
+  - `empayment_review_statement` is **read-only**: new lines, duplicates,
+    probable duplicates, balance check, Dolibarr balance, warnings,
+    fingerprint. `empayment_import_statement` writes, requires the fingerprint
+    of the review, and is to be called only after the user approved the
+    review. Two tools rather than one with a flag, so that the client's own
+    permission prompt for the writing tool is a real human barrier (a client
+    may let the read-only review run without asking).
+  - Both share the statement parameters; the line schema is closed (an
+    unknown key such as `"type": "debit"` is refused instead of silently
+    turning a debit into a credit).
+  - Instructions to the AI, in the tool descriptions: show the review before
+    importing; never guess the bank account; amounts and **balances** signed
+    from the account's point of view (on a card an amount owed is negative even
+    when printed positive; on a balance mismatch try the opposite of both
+    balances first, never flip the lines); `external_id` only for the issuer's
+    unique transaction id, never a line number, a counter of the statement or
+    an authorization code; a replay creates nothing only if the lines are read
+    identically, and probable duplicates are almost always real duplicates:
+    `accept_probable_duplicates` only after the user's explicit, line by line
+    agreement (then review again with it, it is part of the fingerprint).
+  - Every refusal comes back whole, with what to do next, per error code:
+    faulty lines, `BALANCE_MISMATCH` (with the server's hint),
+    `LINE_EXTERNAL_ID_CONFLICT` (remove the external_id, never change date or
+    amount), `PROBABLE_DUPLICATES_UNCONFIRMED`, `LINE_FIELD_UNKNOWN` /
+    `FIELD_UNKNOWN`, unknown account, stale review, and never a second import
+    after a 503 or a lost answer. After an import with fewer bank lines than
+    movements (`BANK_LINES_MISSING`), the AI is told to warn the user.
   - Calls EMPayment's REST routes with the API key and entity of the MCP
     session (Multicompany included); EMPayment's own rights, entity and
     duplicate rules apply. Behind a proxy that redirects http to https, the

@@ -157,25 +157,29 @@ désactivation du compte l'empêche de se reconnecter.
 
 ## Import de relevés EMPayment (depuis la 1.12.0)
 
-Si le module **EMPayment 2.7.0** ou plus récent est activé, emMCP ajoute l'outil
-`empayment_import_statement` : on donne à l'IA le relevé d'une carte de crédit
-ou d'un compte (PDF, CSV, photo), elle le lit et crée les mouvements dans
-EMPayment ; on les rapproche ensuite dans *Banques → CODA → Classer /
-rapprocher*. Rien n'est rapproché ni enregistré par l'outil.
+Si le module **EMPayment 2.7.0** ou plus récent est activé, emMCP ajoute deux
+outils : on donne à l'IA le relevé d'une carte de crédit ou d'un compte (PDF,
+CSV, photo), elle le lit et crée les mouvements dans EMPayment ; on les
+rapproche ensuite dans *Banques → CODA → Classer / rapprocher*. Rien n'est
+rapproché ni enregistré par ces outils.
 
-- Deux temps : l'IA fait d'abord un **aperçu** (rien n'est écrit : lignes
-  nouvelles, doublons, doublons probables, contrôle de solde) et vous le montre ;
-  elle n'importe qu'après votre accord.
-- Le compte bancaire cible est celui que vous désignez (pour une carte, le
-  compte dédié à la carte) ; l'IA ne le devine pas.
-- Montants signés du point de vue du compte (achat par carte négatif), n° de
-  transaction recopié quand le relevé en a un, soldes de début et de fin fournis
-  quand le relevé les imprime (contrôle de lecture).
-- Renvoyer le même relevé ne crée rien.
+- `empayment_review_statement` (lecture seule) : l'aperçu — lignes nouvelles,
+  doublons, doublons probables, contrôle de solde. L'IA vous le montre.
+- `empayment_import_statement` (écriture) : l'import, avec l'empreinte de
+  l'aperçu, seulement après votre accord. Laissez votre client IA vous demander
+  l'autorisation pour cet outil-là : c'est votre garde-fou.
+- Le compte bancaire cible est celui que vous désignez ; l'IA ne le devine pas.
+- Montants et soldes signés du point de vue du compte : sur une carte, un
+  achat est négatif et un solde dû aussi, même si le relevé l'imprime positif.
+- Le n° de transaction n'est recopié que s'il s'agit de l'identifiant unique de
+  l'opération chez l'émetteur (jamais un n° de ligne ni un compteur).
+- Renvoyer un relevé lu à l'identique ne crée rien. Un « doublon probable » (même
+  jour, même montant, texte lu autrement) est presque toujours un vrai doublon :
+  l'IA ne l'importe qu'après votre accord explicite, ligne par ligne.
 - Droits : EMPayment « Consulter les transactions CODA » et Banques « Lire »
   pour l'aperçu ; en plus « Importer des fichiers CODA » et Banques
-  « Créer/modifier » pour l'import. L'outil n'apparaît pas sans les droits
-  d'aperçu.
+  « Créer/modifier » pour l'import. Les outils n'apparaissent pas sans les
+  droits d'aperçu.
 
 ## Multicompany (depuis la 1.11.0)
 

@@ -266,7 +266,7 @@ function emmcp_mcp_audit_config()
 
 /**
  * Collect the MCP tool extensions: those emMCP provides itself for other E-dem
- * modules (EMPayment 2.7.0+: empayment_import_statement), then those other
+ * modules (EMPayment 2.7.0+: statement review and import), then those other
  * Dolibarr modules hand over through the hook.
  *
  * Hook contract (context "emmcp", method "emmcpRegisterTools"):
