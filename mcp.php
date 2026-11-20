@@ -398,7 +398,7 @@ if ($mcpUserId > 0) {
 
 // Tools other modules add through the "emmcpRegisterTools" hook. They run in
 // this process as the session's user, so they get the user with rights loaded.
-$extensions = emmcp_mcp_extensions($db, $mcpUser);
+$extensions = emmcp_mcp_extensions($db, $mcpUser, $apiKey, $mcpEntity);
 
 // Only tool calls are capped. Refusing initialize or tools/list would break the
 // client outright while stopping no data from leaving.

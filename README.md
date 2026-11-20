@@ -1,6 +1,6 @@
 # emMCP — Serveur MCP distant pour Dolibarr
 
-Version 1.11.0. Expose une instance Dolibarr comme **serveur MCP** (Model
+Version 1.12.0. Expose une instance Dolibarr comme **serveur MCP** (Model
 Context Protocol, transport Streamable HTTP) consommable par claude.ai,
 Claude Desktop, ChatGPT (connecteurs OAuth), Claude Code, l'API Anthropic
 (`mcp_servers`) et tout client MCP compatible HTTP.
@@ -154,6 +154,28 @@ Desktop. Pour retirer un accès donné par OAuth : onglet **Accès accordés**,
 bouton **Révoquer** ; supprimer la clé API REST de l'utilisateur ou désactiver
 son compte met aussi fin à tous les accès OAuth qu'il a donnés, et seule la
 désactivation du compte l'empêche de se reconnecter.
+
+## Import de relevés EMPayment (depuis la 1.12.0)
+
+Si le module **EMPayment 2.7.0** ou plus récent est activé, emMCP ajoute l'outil
+`empayment_import_statement` : on donne à l'IA le relevé d'une carte de crédit
+ou d'un compte (PDF, CSV, photo), elle le lit et crée les mouvements dans
+EMPayment ; on les rapproche ensuite dans *Banques → CODA → Classer /
+rapprocher*. Rien n'est rapproché ni enregistré par l'outil.
+
+- Deux temps : l'IA fait d'abord un **aperçu** (rien n'est écrit : lignes
+  nouvelles, doublons, doublons probables, contrôle de solde) et vous le montre ;
+  elle n'importe qu'après votre accord.
+- Le compte bancaire cible est celui que vous désignez (pour une carte, le
+  compte dédié à la carte) ; l'IA ne le devine pas.
+- Montants signés du point de vue du compte (achat par carte négatif), n° de
+  transaction recopié quand le relevé en a un, soldes de début et de fin fournis
+  quand le relevé les imprime (contrôle de lecture).
+- Renvoyer le même relevé ne crée rien.
+- Droits : EMPayment « Consulter les transactions CODA » et Banques « Lire »
+  pour l'aperçu ; en plus « Importer des fichiers CODA » et Banques
+  « Créer/modifier » pour l'import. L'outil n'apparaît pas sans les droits
+  d'aperçu.
 
 ## Multicompany (depuis la 1.11.0)
 

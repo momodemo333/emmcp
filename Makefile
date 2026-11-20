@@ -59,6 +59,7 @@ CRITICAL_FILES := mcp.php oauth.php .htaccess \
 	vendor/dolibarr-mcp-oauth/src/OAuthRouter.php \
 	vendor/dolibarr-mcp-server/vendor/emmcp-scope-prefix.txt \
 	admin/diagnostic.php class/emmcpauthlog.class.php lib/emmcp_runtime.php lib/emmcp_entity.lib.php \
+	class/EmmcpEmpaymentTools.php class/EmmcpEmpaymentExtension.php \
 	sql/llx_emmcp_auth_log.sql sql/llx_emmcp_auth_log.key.sql
 
 # Colors
@@ -272,7 +273,7 @@ build-release: check-runtime check-oauth check-sql check-audit check-scoper
 
 	@echo "[1/7] Copying module files..."
 	@cp -r admin class core lib sql langs $(BUILD_DIR)/$(MODULE_NAME)/
-	@cp mcp.php oauth.php README.md CHANGELOG.md .htaccess $(BUILD_DIR)/$(MODULE_NAME)/
+	@cp mcp.php oauth.php README.md CHANGELOG.md CHANGELOG-fr_FR.md .htaccess $(BUILD_DIR)/$(MODULE_NAME)/
 
 	@echo "[2/7] Bundling dolibarr-mcp-server package..."
 	@mkdir -p $(BUILD_DIR)/$(MODULE_NAME)/vendor/dolibarr-mcp-server

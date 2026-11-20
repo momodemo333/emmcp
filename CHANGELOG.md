@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.12.0] - 2026-11-20
+
+### Added
+- **New tool `empayment_import_statement`: give the AI a card or bank
+  statement (PDF, CSV, photo) and it creates the movements in EMPayment**, to
+  reconcile in EMPayment's CODA screens. Offered only when EMPayment 2.7.0 or
+  later is enabled in the entity of the connection and the user may review a
+  statement (EMPayment "View CODA transactions" and Banks "Read"); importing
+  also needs EMPayment "Import CODA files" and Banks "Create/modify".
+  - Two calls, as every EMPayment action: a review that writes nothing
+    (new lines, duplicates, probable duplicates, balance check, warnings,
+    fingerprint), then the import with `confirm=true` and that fingerprint.
+  - The tool tells the AI to show the review to the user before confirming,
+    never to guess the bank account, to sign amounts from the account's point
+    of view (card purchase negative), to copy the transaction number whenever
+    the statement prints one, to give the opening and closing balances, and
+    never to alter a line to get round a reported duplicate (sending the same
+    statement again creates nothing).
+  - Every refusal comes back whole, with what to do next: all faulty lines of
+    a refused statement (EMPayment lists them all), balance mismatch, unknown
+    account, stale review (409: review again), and never a second import call
+    after a 503 or a lost answer.
+  - Calls EMPayment's REST routes with the API key and entity of the MCP
+    session (Multicompany included); EMPayment's own rights, entity and
+    duplicate rules apply. Behind a proxy that redirects http to https, the
+    call is retried once over https on the same host.
+
+### Notes
+- No database change (schema version 1.12.0, nothing to migrate). Nothing
+  changes without EMPayment 2.7.0+. A French changelog now ships with the
+  module (`CHANGELOG-fr_FR.md`).
+
 ## [1.11.0] - 2026-11-20
 
 ### Added

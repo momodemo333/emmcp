@@ -265,7 +265,9 @@ function emmcp_mcp_audit_config()
 }
 
 /**
- * Collect the MCP tool extensions other Dolibarr modules provide.
+ * Collect the MCP tool extensions: those emMCP provides itself for other E-dem
+ * modules (EMPayment 2.7.0+: empayment_import_statement), then those other
+ * Dolibarr modules hand over through the hook.
  *
  * Hook contract (context "emmcp", method "emmcpRegisterTools"):
  *   $parameters['user']      User   the person the MCP session acts as, rights loaded
@@ -277,11 +279,13 @@ function emmcp_mcp_audit_config()
  * A module that throws, or returns something that is not an extension, is
  * logged and ignored: an extension must never take emMCP down.
  *
- * @param  DoliDB    $db      Database handler
- * @param  User|null $mcpUser User of the MCP session
+ * @param  DoliDB      $db      Database handler
+ * @param  User|null   $mcpUser User of the MCP session
+ * @param  string|null $apiKey  REST API key of the session (built-in tools call the REST API with it)
+ * @param  int|null    $entity  Entity of the session (Multicompany), null = user's main entity
  * @return array<int, \DolibarrMcp\Extension\ToolExtension>
  */
-function emmcp_mcp_extensions($db, $mcpUser)
+function emmcp_mcp_extensions($db, $mcpUser, $apiKey = null, $entity = null)
 {
 	if (!interface_exists('\DolibarrMcp\Extension\ToolExtension')) {
 		// Embedded runtime older than 2.7.0: no extension point to feed.
@@ -289,6 +293,21 @@ function emmcp_mcp_extensions($db, $mcpUser)
 	}
 	if (!is_object($mcpUser) || empty($mcpUser->id)) {
 		return array();
+	}
+
+	$extensions = array();
+
+	// Tools emMCP provides itself, through the same extension point. A failure
+	// here is logged and leaves the other tools untouched.
+	if ($apiKey !== null && $apiKey !== '') {
+		try {
+			dol_include_once('/emmcp/class/EmmcpEmpaymentExtension.php');
+			if (EmmcpEmpaymentTools::isAvailable($db, $mcpUser)) {
+				$extensions[] = new EmmcpEmpaymentExtension(new EmmcpEmpaymentTools(\DolibarrMcpOAuth\Support\UrlHelper::upgradeScheme(DOL_MAIN_URL_ROOT, $_SERVER), $apiKey, $entity));
+			}
+		} catch (\Throwable $e) {
+			dol_syslog('[EMMCP] EMPayment tools not loaded: '.$e->getMessage(), LOG_ERR);
+		}
 	}
 
 	include_once DOL_DOCUMENT_ROOT.'/core/class/hookmanager.class.php';
@@ -305,7 +324,6 @@ function emmcp_mcp_extensions($db, $mcpUser)
 		dol_syslog('[EMMCP] emmcpRegisterTools hook failed: '.$e->getMessage(), LOG_ERR);
 	}
 
-	$extensions = array();
 	foreach ($collector as $extension) {
 		if ($extension instanceof \DolibarrMcp\Extension\ToolExtension) {
 			$extensions[] = $extension;
